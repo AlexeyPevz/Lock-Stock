@@ -17,14 +17,17 @@ export interface GeneratorOptions {
 }
 
 function getClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const baseURL = process.env.OPENAI_BASE_URL;
-  if (!apiKey) throw new Error("OPENAI_API_KEY is required for generation");
-  return new OpenAI({ apiKey, baseURL });
+  const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+  const baseURL = process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1";
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY or OPENAI_API_KEY is required for generation");
+  const defaultHeaders: Record<string, string> = {};
+  if (process.env.OPENROUTER_REFERER) defaultHeaders["HTTP-Referer"] = process.env.OPENROUTER_REFERER;
+  if (process.env.OPENROUTER_TITLE) defaultHeaders["X-Title"] = process.env.OPENROUTER_TITLE;
+  return new OpenAI({ apiKey, baseURL, defaultHeaders });
 }
 
 export async function generateOneRound(options: GeneratorOptions = {}): Promise<GeneratedRound> {
-  const model = options.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = options.model || process.env.OPENAI_MODEL || "meta-llama/llama-3.1-8b-instruct:free";
   const temperature = options.temperature ?? 0.7;
   const client = getClient();
 
