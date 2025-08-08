@@ -10,18 +10,21 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "seed": "ts-node-dev --transpile-only src/scripts/seed.ts"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "better-sqlite3": "^11.10.0",
     "dotenv": "^16.4.5",
     "grammy": "^1.24.1",
     "openai": "^4.57.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.14.12",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.4"

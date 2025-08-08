@@ -6,6 +6,8 @@ import { RoundBundle, Session as GameSession, RevealState } from "./types";
 import { loadPack } from "./content/provider";
 import { renderRoundText } from "./utils/render";
 import { generateOneRound } from "./generation/generator";
+import { openDb } from "./db/client";
+import { selectNextRound, markRoundSeen } from "./db/selector";
 
 dotenv.config();
 
@@ -36,6 +38,7 @@ const CONTENT_PACK_PATH = process.env.CONTENT_PACK_PATH || "./content/pack.defau
 
 // In-memory sessions by chat id
 const sessions = new Map<number, GameSession>();
+const db = openDb();
 
 // Session middleware placeholder (using grammy session for per-user misc if needed)
 interface BotSessionData { /* future */ }
@@ -160,10 +163,25 @@ bot.command("newgame", async (ctx) => {
 });
 
 async function sendOrUpdateRound(ctx: MyContext, session: GameSession) {
+  const chatId = session.chatId;
+  const userId = ctx.from?.id || chatId; // group host treated as user
+
   const index = session.currentIndex;
   if (index >= session.rounds.length) {
-    await ctx.reply("Раунды закончились! Спасибо за игру.");
-    return;
+    // Try to fetch a new round from DB (unique by user)
+    const picked = selectNextRound(db, userId);
+    if (!picked) {
+      await ctx.reply("Раунды закончились! Спасибо за игру.");
+      return;
+    }
+    // Mark seen and create a simple placeholder rendering from DB number
+    markRoundSeen(db, userId, picked.round_id, picked.number);
+    // Fallback text until full DB->RoundBundle hydration is implemented
+    await ctx.reply(
+      `Новый раунд из базы. Число скрыто. (№ ${picked.number})\n` +
+      "Пока используется статический формат отображения из паков."
+    );
+    // Also continue with in-memory flow for UI
   }
   const round = session.rounds[index];
   const state = session.revealed[index] || createInitialReveal();
