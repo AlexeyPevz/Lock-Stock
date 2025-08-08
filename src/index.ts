@@ -9,7 +9,7 @@ import { generateOneRound } from "./generation/generator";
 import { openDb } from "./db/client";
 import { selectNextRound, markRoundSeen } from "./db/selector";
 import { getRoundBundleById } from "./db/rounds";
-import { upsertFact as upsertFactDb, upsertRound as upsertRoundDb } from "./db/upsert";
+import { ensureFactsAndRound } from "./db/upsert";
 import { saveRoundFeedback } from "./db/feedback";
 import { getQualityReport, recomputeFactRatings, quarantineLowQualityFacts } from "./db/quality";
 
@@ -361,10 +361,7 @@ bot.command("gen", async (ctx) => {
 
   // Save into DB for future reuse
   for (const r of generated) {
-    upsertFactDb(db, r.question);
-    upsertFactDb(db, r.hint1);
-    upsertFactDb(db, r.hint2);
-    upsertRoundDb(db, r);
+    ensureFactsAndRound(db, r);
   }
 
   session.isPremium = false;

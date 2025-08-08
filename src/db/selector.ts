@@ -13,6 +13,18 @@ export function selectNextRound(db: DB, userId: number): { round_id: string; num
 
   // Pick a round whose number user did not see
   const pickStmt = db.prepare(`
+    WITH last_domains AS (
+      SELECT DISTINCT d.domain FROM (
+        SELECT r.id as r_id
+        FROM user_seen us
+        JOIN rounds r ON r.id = us.round_id
+        WHERE us.user_id = ?
+        ORDER BY us.seen_at DESC
+        LIMIT 2
+      ) lr
+      JOIN rounds r2 ON r2.id = lr.r_id
+      JOIN facts_by_number d ON d.id IN (r2.question_fact_id, r2.hint1_fact_id, r2.hint2_fact_id)
+    )
     SELECT r.id as round_id, r.number
     FROM rounds r
     JOIN facts_by_number fq ON fq.id = r.question_fact_id
@@ -22,6 +34,9 @@ export function selectNextRound(db: DB, userId: number): { round_id: string; num
       SELECT number FROM user_seen WHERE user_id = ?
     )
       AND fq.quarantined = 0 AND f1.quarantined = 0 AND f2.quarantined = 0
+      AND (
+        (SELECT COUNT(*) FROM last_domains ld WHERE ld.domain IN (fq.domain, f1.domain, f2.domain)) <= 2
+      )
     ORDER BY RANDOM()
     LIMIT 1
   `);
