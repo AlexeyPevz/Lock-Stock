@@ -176,6 +176,57 @@ V2
 
 Этот README аккумулирует механику шоу и переводит её в точные требования к боту-ведущему: строгие правила раунда, слепой режим для ведущего, кэш из проверенных раундов, верификация и фидбек для самосовершенствования контента, а также понятную монетизацию через Stars.[1][2][3]
 
+## Хостинг и деплой
+
+Варианты:
+- Docker (любой VPS / облако)
+- Fly.io (free-tier), Railway/Render, либо свой VPS (Hetzner/OVH/Селектел)
+
+Docker локально:
+```bash
+docker build -t lockstock-bot .
+docker run --rm -it \
+  -e BOT_TOKEN=xxx \
+  -e ADMIN_USER_IDS=123456789 \
+  -e CONTENT_PACK_PATH=./content/pack.default.json \
+  -e OPENROUTER_API_KEY=... \
+  lockstock-bot
+```
+
+Fly.io (кратко):
+- Установите `flyctl`, выполните `fly launch` (Node/Docker), задайте переменные окружения: `fly secrets set BOT_TOKEN=... OPENROUTER_API_KEY=...`
+- Деплой: `fly deploy`
+
+Railway/Render:
+- Создайте новый сервис из репозитория или Dockerfile
+- Добавьте переменные окружения (`BOT_TOKEN`, `OPENROUTER_API_KEY`, `ADMIN_USER_IDS` и т.д.)
+- Запустите билд и деплой
+
+VPS вручную:
+- Установите Node 20, склонируйте репозиторий, `npm ci && npm run build`
+- Настройте systemd unit, чтобы бот перезапускался и стартовал при перезагрузке
+
+Пример systemd unit `/etc/systemd/system/lockstock-bot.service`:
+```
+[Unit]
+Description=LockStock Question Bot
+After=network.target
+
+[Service]
+Environment=NODE_ENV=production
+Environment=BOT_TOKEN=xxx
+Environment=OPENROUTER_API_KEY=xxx
+WorkingDirectory=/opt/lockstock-bot
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+User=bot
+Group=bot
+
+[Install]
+WantedBy=multi-user.target
+```
+
 Источники
 [1] ЛОК СТОК #1 СТАВКА НА ЗНАНИЯ /Абрамов/Чабдаров/ ... https://www.youtube.com/watch?v=YaVvVExoTiY
 [2] ЛОК СТОК #10 СТАВКА НА ЗНАНИЯ / Макарена ... https://www.youtube.com/watch?v=9AIOG_oepS0
