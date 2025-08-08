@@ -8,6 +8,8 @@ import { renderRoundText } from "./utils/render";
 import { generateOneRound } from "./generation/generator";
 import { openDb } from "./db/client";
 import { selectNextRound, markRoundSeen } from "./db/selector";
+import { getRoundBundleById } from "./db/rounds";
+import { upsertFact as upsertFactDb, upsertRound as upsertRoundDb } from "./db/upsert";
 
 dotenv.config();
 
@@ -113,6 +115,7 @@ function selectRoundsForSession(isPremium: boolean): RoundBundle[] {
 
 function toBundleFromGenerated(gen: {question: string; hint1: string; hint2: string; answer: number;}): RoundBundle {
   const idBase = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // Domain detection could be added; for now keep "other"
   return {
     number: gen.answer,
     question: { id: `${idBase}-q`, number: gen.answer, domain: "other", text: gen.question },
@@ -174,14 +177,19 @@ async function sendOrUpdateRound(ctx: MyContext, session: GameSession) {
       await ctx.reply("Раунды закончились! Спасибо за игру.");
       return;
     }
-    // Mark seen and create a simple placeholder rendering from DB number
+    const bundle = getRoundBundleById(db, picked.round_id);
+    if (!bundle) {
+      await ctx.reply("Ошибка загрузки раунда из базы");
+      return;
+    }
     markRoundSeen(db, userId, picked.round_id, picked.number);
-    // Fallback text until full DB->RoundBundle hydration is implemented
-    await ctx.reply(
-      `Новый раунд из базы. Число скрыто. (№ ${picked.number})\n` +
-      "Пока используется статический формат отображения из паков."
-    );
-    // Also continue with in-memory flow for UI
+
+    // Render full round
+    const state = createInitialReveal();
+    const text = renderRoundText(bundle, state);
+    const keyboard = buildHostKeyboard(state, allowSkipForSession(session));
+    await ctx.reply(text, { reply_markup: keyboard });
+    return;
   }
   const round = session.rounds[index];
   const state = session.revealed[index] || createInitialReveal();
@@ -318,6 +326,14 @@ bot.command("gen", async (ctx) => {
   if (generated.length === 0) {
     await ctx.reply("Не удалось сгенерировать раунды");
     return;
+  }
+
+  // Save into DB for future reuse
+  for (const r of generated) {
+    upsertFactDb(db, r.question);
+    upsertFactDb(db, r.hint1);
+    upsertFactDb(db, r.hint2);
+    upsertRoundDb(db, r);
   }
 
   session.isPremium = false;
