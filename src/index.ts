@@ -11,6 +11,7 @@ import { selectNextRound, markRoundSeen } from "./db/selector";
 import { getRoundBundleById } from "./db/rounds";
 import { upsertFact as upsertFactDb, upsertRound as upsertRoundDb } from "./db/upsert";
 import { saveRoundFeedback } from "./db/feedback";
+import { getQualityReport, recomputeFactRatings, quarantineLowQualityFacts } from "./db/quality";
 
 dotenv.config();
 
@@ -386,6 +387,29 @@ bot.command("reload", async (ctx) => {
   } catch (e: any) {
     await ctx.reply(`Ошибка перезагрузки: ${e?.message ?? e}`);
   }
+});
+
+bot.command("quality", async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId || !ADMIN_IDS.has(userId)) return;
+  const report = getQualityReport(db);
+  await ctx.reply(
+    [
+      `Фактов: ${report.totals.facts}`,
+      `Карантин: ${report.totals.quarantined}`,
+      `Средний рейтинг: ${report.totals.avg_rating ?? "-"}`,
+      "Худшие по рейтингу:",
+      ...report.worst.map((w) => `- ${w.id} (#${w.number}, ${w.domain}) = ${w.rating ?? "-"}`),
+    ].join("\n")
+  );
+});
+
+bot.command("recalc", async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId || !ADMIN_IDS.has(userId)) return;
+  recomputeFactRatings(db);
+  quarantineLowQualityFacts(db);
+  await ctx.reply("Рейтинг пересчитан, карантин обновлён");
 });
 
 bot.catch((err) => {
