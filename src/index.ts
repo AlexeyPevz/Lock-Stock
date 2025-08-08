@@ -5,6 +5,7 @@ import { RoundBundle, Session as GameSession, RevealState } from "./types";
 // import { sampleRounds } from "./data/sampleRounds";
 import { loadPack } from "./content/provider";
 import { renderRoundText } from "./utils/render";
+import { generateOneRound } from "./generation/generator";
 
 dotenv.config();
 
@@ -48,6 +49,7 @@ bot.api.setMyCommands([
   { command: "newgame", description: "Новая игра (пачка раундов)" },
   { command: "rules", description: "Правила (кратко)" },
   { command: "premium", description: "Премиум и Stars" },
+  { command: "gen", description: "[админ] Сгенерировать N раундов" },
   { command: "help", description: "Помощь" },
 ]);
 
@@ -104,6 +106,16 @@ function selectRoundsForSession(isPremium: boolean): RoundBundle[] {
   const pack = cachedPack ?? reloadContentPack();
   const total = isPremium ? DEFAULT_PREMIUM : DEFAULT_FREE;
   return pack.slice(0, Math.min(total, pack.length));
+}
+
+function toBundleFromGenerated(gen: {question: string; hint1: string; hint2: string; answer: number;}): RoundBundle {
+  const idBase = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    number: gen.answer,
+    question: { id: `${idBase}-q`, number: gen.answer, domain: "other", text: gen.question },
+    hint1: { id: `${idBase}-h1`, number: gen.answer, domain: "other", text: gen.hint1 },
+    hint2: { id: `${idBase}-h2`, number: gen.answer, domain: "other", text: gen.hint2 },
+  };
 }
 
 bot.command("start", async (ctx) => {
@@ -243,6 +255,59 @@ bot.callbackQuery(/timer:(30|60|90)/, async (ctx) => {
       }
     }, delay);
   }
+});
+
+bot.command("gen", async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId || !ADMIN_IDS.has(userId)) {
+    await ctx.reply("Недостаточно прав");
+    return;
+  }
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const session = getOrCreateSession(chatId);
+
+  const text = ctx.message?.text || "";
+  const parts = text.split(/\s+/);
+  const count = Math.min(Math.max(Number(parts[1] || 1) || 1, 1), 15);
+  await ctx.reply(`Генерация ${count} раунд(ов)…`);
+
+  const generated: RoundBundle[] = [];
+  const seenAnswers = new Set<number>();
+  // include answers already used in current pack/session to avoid reuse
+  for (const r of session.rounds) seenAnswers.add(r.number);
+  if (cachedPack) for (const r of cachedPack) seenAnswers.add(r.number);
+
+  for (let i = 0; i < count; i++) {
+    try {
+      let attempt = 0;
+      while (attempt < 3) {
+        attempt += 1;
+        const gen = await generateOneRound();
+        if (seenAnswers.has(gen.answer)) {
+          continue; // regenerate silently per rule 8
+        }
+        seenAnswers.add(gen.answer);
+        generated.push(toBundleFromGenerated(gen));
+        break;
+      }
+    } catch (e: any) {
+      await ctx.reply(`Ошибка генерации: ${e?.message ?? e}`);
+      break;
+    }
+  }
+
+  if (generated.length === 0) {
+    await ctx.reply("Не удалось сгенерировать раунды");
+    return;
+  }
+
+  session.isPremium = false;
+  session.rounds = generated.concat(selectRoundsForSession(session.isPremium));
+  session.currentIndex = 0;
+  session.revealed = {};
+
+  await sendOrUpdateRound(ctx, session);
 });
 
 bot.command("reload", async (ctx) => {
