@@ -2,7 +2,8 @@ import { Bot, InlineKeyboard, Context, session, SessionFlavor } from "grammy";
 import dotenv from "dotenv";
 import { z } from "zod";
 import { RoundBundle, Session as GameSession, RevealState } from "./types";
-import { sampleRounds } from "./data/sampleRounds";
+// import { sampleRounds } from "./data/sampleRounds";
+import { loadPack } from "./content/provider";
 import { renderRoundText } from "./utils/render";
 
 dotenv.config();
@@ -30,6 +31,7 @@ const ADMIN_IDS = new Set(
 );
 const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || 5);
 const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || 15);
+const CONTENT_PACK_PATH = process.env.CONTENT_PACK_PATH || "./content/pack.default.json";
 
 // In-memory sessions by chat id
 const sessions = new Map<number, GameSession>();
@@ -92,9 +94,16 @@ function getOrCreateSession(chatId: number): GameSession {
   return gs;
 }
 
+let cachedPack: RoundBundle[] | null = null;
+function reloadContentPack(): RoundBundle[] {
+  cachedPack = loadPack(CONTENT_PACK_PATH);
+  return cachedPack;
+}
+
 function selectRoundsForSession(isPremium: boolean): RoundBundle[] {
+  const pack = cachedPack ?? reloadContentPack();
   const total = isPremium ? DEFAULT_PREMIUM : DEFAULT_FREE;
-  return sampleRounds.slice(0, Math.min(total, sampleRounds.length));
+  return pack.slice(0, Math.min(total, pack.length));
 }
 
 bot.command("start", async (ctx) => {
@@ -233,6 +242,20 @@ bot.callbackQuery(/timer:(30|60|90)/, async (ctx) => {
         // ignore edit errors
       }
     }, delay);
+  }
+});
+
+bot.command("reload", async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId || !ADMIN_IDS.has(userId)) {
+    await ctx.reply("Недостаточно прав");
+    return;
+  }
+  try {
+    const rounds = reloadContentPack();
+    await ctx.reply(`Пак перезагружен: ${rounds.length} раундов`);
+  } catch (e: any) {
+    await ctx.reply(`Ошибка перезагрузки: ${e?.message ?? e}`);
   }
 });
 
