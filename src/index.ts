@@ -1,0 +1,245 @@
+import { Bot, InlineKeyboard, Context, session, SessionFlavor } from "grammy";
+import dotenv from "dotenv";
+import { z } from "zod";
+import { RoundBundle, Session as GameSession, RevealState } from "./types";
+import { sampleRounds } from "./data/sampleRounds";
+import { renderRoundText } from "./utils/render";
+
+dotenv.config();
+
+const EnvSchema = z.object({
+  BOT_TOKEN: z.string().min(1, "BOT_TOKEN is required"),
+  ADMIN_USER_IDS: z.string().optional(),
+  FREE_ROUNDS: z.string().optional(),
+  PREMIUM_ROUNDS: z.string().optional(),
+});
+
+const parsedEnv = EnvSchema.safeParse(process.env);
+if (!parsedEnv.success) {
+  console.error("Environment error:", parsedEnv.error.flatten().fieldErrors);
+  process.exit(1);
+}
+
+const BOT_TOKEN = parsedEnv.data.BOT_TOKEN;
+const ADMIN_IDS = new Set(
+  (parsedEnv.data.ADMIN_USER_IDS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => Number(s))
+);
+const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || 5);
+const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || 15);
+
+// In-memory sessions by chat id
+const sessions = new Map<number, GameSession>();
+
+// Session middleware placeholder (using grammy session for per-user misc if needed)
+interface BotSessionData { /* future */ }
+
+type MyContext = Context & SessionFlavor<BotSessionData>;
+
+const bot = new Bot<MyContext>(BOT_TOKEN);
+
+bot.api.setMyCommands([
+  { command: "start", description: "Начать" },
+  { command: "newgame", description: "Новая игра (пачка раундов)" },
+  { command: "rules", description: "Правила (кратко)" },
+  { command: "premium", description: "Премиум и Stars" },
+  { command: "help", description: "Помощь" },
+]);
+
+bot.use(
+  session({
+    initial: (): BotSessionData => ({}),
+  })
+);
+
+function createInitialReveal(): RevealState {
+  return { showQuestion: true, showHint1: false, showHint2: false, showAnswer: false };
+}
+
+function buildHostKeyboard(state: RevealState, canSkip: boolean) {
+  const k = new InlineKeyboard();
+  k.text(state.showQuestion ? "Вопрос ✓" : "Показать вопрос", "reveal:question");
+  k.row();
+  k.text(state.showHint1 ? "Подсказка 1 ✓" : "Показать подсказку 1", "reveal:hint1");
+  k.row();
+  k.text(state.showHint2 ? "Подсказка 2 ✓" : "Показать подсказку 2", "reveal:hint2");
+  k.row();
+  k.text(state.showAnswer ? "Ответ ✓" : "Показать ответ", "reveal:answer");
+  k.row();
+  k.text("Таймер 30", "timer:30").text("Таймер 60", "timer:60").text("Таймер 90", "timer:90");
+  k.row();
+  if (canSkip) k.text("Скип раунда", "round:skip");
+  k.text("Правила", "show:rules");
+  return k;
+}
+
+function getOrCreateSession(chatId: number): GameSession {
+  const existing = sessions.get(chatId);
+  if (existing) return existing;
+  const gs: GameSession = {
+    chatId,
+    rounds: [],
+    currentIndex: 0,
+    revealed: {},
+    freeLimit: DEFAULT_FREE,
+    premiumTotal: DEFAULT_PREMIUM,
+    isPremium: false,
+  };
+  sessions.set(chatId, gs);
+  return gs;
+}
+
+function selectRoundsForSession(isPremium: boolean): RoundBundle[] {
+  const total = isPremium ? DEFAULT_PREMIUM : DEFAULT_FREE;
+  return sampleRounds.slice(0, Math.min(total, sampleRounds.length));
+}
+
+bot.command("start", async (ctx) => {
+  await ctx.reply(
+    "Lock Stock Question Bot — офлайн-помощник для домашней игры. Используйте /newgame, чтобы начать новую пачку раундов."
+  );
+});
+
+bot.command("rules", async (ctx) => {
+  await ctx.reply(
+    [
+      "Краткие правила:",
+      "- В начале раунда все делают обязательную ставку и пишут ответ (менять нельзя)",
+      "- Можно: рейз, чек (бесплатная подсказка), пас",
+      "- Ведущий по кнопкам открывает Подсказку 1, Подсказку 2 и Ответ",
+      "- После каждой подсказки — новые решения",
+      "- Побеждает ответ ближе к правильному",
+    ].join("\n")
+  );
+});
+
+bot.command("premium", async (ctx) => {
+  await ctx.reply(
+    "Премиум: +10 раундов в сессии за Telegram Stars (MVP: заглушка). Доступно 5 бесплатных раундов."
+  );
+});
+
+bot.command("help", async (ctx) => {
+  await ctx.reply("Команды: /start, /newgame, /rules, /premium, /help");
+});
+
+bot.command("newgame", async (ctx) => {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const session = getOrCreateSession(chatId);
+  session.isPremium = false; // start as free
+  session.rounds = selectRoundsForSession(session.isPremium);
+  session.currentIndex = 0;
+  session.revealed = {};
+
+  await sendOrUpdateRound(ctx, session);
+});
+
+async function sendOrUpdateRound(ctx: MyContext, session: GameSession) {
+  const index = session.currentIndex;
+  if (index >= session.rounds.length) {
+    await ctx.reply("Раунды закончились! Спасибо за игру.");
+    return;
+  }
+  const round = session.rounds[index];
+  const state = session.revealed[index] || createInitialReveal();
+  session.revealed[index] = state;
+
+  const text = renderRoundText(round, state);
+  const canSkip = allowSkipForSession(session);
+  const keyboard = buildHostKeyboard(state, canSkip);
+  await ctx.reply(text, { reply_markup: keyboard });
+}
+
+function allowSkipForSession(session: GameSession): boolean {
+  // MVP: разрешаем 2 скипа за сессию
+  const usedSkips = Object.values(session.revealed).filter((s) => s.showAnswer && s.showQuestion && s.showHint1 && s.showHint2).length;
+  return usedSkips < 2;
+}
+
+bot.callbackQuery(/reveal:(question|hint1|hint2|answer)/, async (ctx) => {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return ctx.answerCallbackQuery();
+  const session = getOrCreateSession(chatId);
+  const index = session.currentIndex;
+  if (index >= session.rounds.length) return ctx.answerCallbackQuery();
+
+  const state = session.revealed[index] || createInitialReveal();
+  session.revealed[index] = state;
+  const [, what] = ctx.callbackQuery.data.split(":");
+  if (what === "question") state.showQuestion = true;
+  if (what === "hint1") state.showHint1 = true;
+  if (what === "hint2") state.showHint2 = true;
+  if (what === "answer") state.showAnswer = true;
+
+  const round = session.rounds[index];
+  await ctx.editMessageText(renderRoundText(round, state), {
+    reply_markup: buildHostKeyboard(state, allowSkipForSession(session)),
+  });
+  await ctx.answerCallbackQuery();
+});
+
+bot.callbackQuery("round:skip", async (ctx) => {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return ctx.answerCallbackQuery();
+  const session = getOrCreateSession(chatId);
+
+  if (!allowSkipForSession(session)) {
+    await ctx.answerCallbackQuery({ text: "Лимит скипов исчерпан", show_alert: true });
+    return;
+  }
+  session.currentIndex += 1;
+  // reset message by sending a new one
+  await ctx.answerCallbackQuery();
+  await sendOrUpdateRound(ctx, session);
+});
+
+bot.callbackQuery("show:rules", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply(
+    [
+      "Краткие правила:",
+      "- Обязательная ставка, ответ пишется один раз",
+      "- Чек = получить подсказку без ставок",
+      "- После каждой подсказки — новые решения",
+      "- Побеждает ближайший к правильному ответ",
+    ].join("\n")
+  );
+});
+
+bot.callbackQuery(/timer:(30|60|90)/, async (ctx) => {
+  const seconds = Number(ctx.match![1]);
+  await ctx.answerCallbackQuery();
+  const message = await ctx.reply(`Таймер: ${seconds}с`);
+
+  const checkpoints = [Math.floor(seconds / 2), 10, 5, 0]
+    .filter((s, i, arr) => s > 0 || i === arr.length - 1)
+    .filter((v, i, a) => a.indexOf(v) === i) // unique
+    .sort((a, b) => b - a);
+
+  for (const cp of checkpoints) {
+    const delay = (seconds - cp) * 1000;
+    setTimeout(async () => {
+      try {
+        if (cp > 0) {
+          await ctx.api.editMessageText(message.chat.id, message.message_id, `Таймер: ${cp}с`);
+        } else {
+          await ctx.api.editMessageText(message.chat.id, message.message_id, "Таймер: стоп");
+        }
+      } catch {
+        // ignore edit errors
+      }
+    }, delay);
+  }
+});
+
+bot.catch((err) => {
+  console.error("Bot error:", err);
+});
+
+if (process.env.NODE_ENV !== "test") {
+  bot.start().then(() => console.log("Bot started"));
+}
