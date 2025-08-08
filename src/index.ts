@@ -10,6 +10,7 @@ import { openDb } from "./db/client";
 import { selectNextRound, markRoundSeen } from "./db/selector";
 import { getRoundBundleById } from "./db/rounds";
 import { upsertFact as upsertFactDb, upsertRound as upsertRoundDb } from "./db/upsert";
+import { saveRoundFeedback } from "./db/feedback";
 
 dotenv.config();
 
@@ -82,6 +83,16 @@ function buildHostKeyboard(state: RevealState, canSkip: boolean) {
   k.row();
   if (canSkip) k.text("Скип раунда", "round:skip");
   k.text("Правила", "show:rules");
+  return k;
+}
+
+function buildFeedbackKeyboard(roundId: string, number: number) {
+  const k = new InlineKeyboard();
+  k.text("★1", `fb:rate:${roundId}:${number}:1`).text("★2", `fb:rate:${roundId}:${number}:2`).text("★3", `fb:rate:${roundId}:${number}:3`).row();
+  k.text("★4", `fb:rate:${roundId}:${number}:4`).text("★5", `fb:rate:${roundId}:${number}:5`).row();
+  k.text("Сложно", `fb:cat:${roundId}:${number}:hard`).text("Легко", `fb:cat:${roundId}:${number}:easy`).row();
+  k.text("Спорно", `fb:cat:${roundId}:${number}:controversial`).text("Узкая тема", `fb:cat:${roundId}:${number}:niche`).row();
+  k.text("Формулировка", `fb:cat:${roundId}:${number}:wording`).text("Устарело", `fb:cat:${roundId}:${number}:outdated`);
   return k;
 }
 
@@ -187,6 +198,8 @@ async function sendOrUpdateRound(ctx: MyContext, session: GameSession) {
     // Render full round
     const state = createInitialReveal();
     const text = renderRoundText(bundle, state);
+    session.roundIds = session.roundIds || {};
+    session.roundIds[session.currentIndex] = picked.round_id;
     const keyboard = buildHostKeyboard(state, allowSkipForSession(session));
     await ctx.reply(text, { reply_markup: keyboard });
     return;
@@ -223,10 +236,27 @@ bot.callbackQuery(/reveal:(question|hint1|hint2|answer)/, async (ctx) => {
   if (what === "answer") state.showAnswer = true;
 
   const round = session.rounds[index];
+  const replyMarkup = state.showAnswer && session.roundIds?.[index]
+    ? buildFeedbackKeyboard(session.roundIds[index], round.number)
+    : buildHostKeyboard(state, allowSkipForSession(session));
   await ctx.editMessageText(renderRoundText(round, state), {
-    reply_markup: buildHostKeyboard(state, allowSkipForSession(session)),
+    reply_markup: replyMarkup,
   });
   await ctx.answerCallbackQuery();
+});
+
+bot.callbackQuery(/fb:(rate|cat):(.+?):(\d+):(\w+)/, async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return ctx.answerCallbackQuery();
+  const [, kind, roundId, numberStr, value] = ctx.match as unknown as [string, string, string, string, string];
+  const number = Number(numberStr);
+  if (kind === "rate") {
+    const rating = Number(value);
+    if (rating >= 1 && rating <= 5) saveRoundFeedback(db, userId, roundId, number, rating, null);
+  } else if (kind === "cat") {
+    saveRoundFeedback(db, userId, roundId, number, null, value);
+  }
+  await ctx.answerCallbackQuery({ text: "Спасибо за отзыв!" });
 });
 
 bot.callbackQuery("round:skip", async (ctx) => {

@@ -35,6 +35,7 @@ export interface Session {
   rounds: RoundBundle[];
   currentIndex: number;
   revealed: Record<number, RevealState>; // index -> state
+  roundIds?: Record<number, string>; // index -> roundId (for DB/feedback)
   freeLimit: number; // free rounds available
   premiumTotal: number; // total rounds when premium
   isPremium: boolean;
