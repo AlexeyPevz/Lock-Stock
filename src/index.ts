@@ -12,6 +12,7 @@ import { getRoundBundleById } from "./db/rounds";
 import { ensureFactsAndRound } from "./db/upsert";
 import { saveRoundFeedback } from "./db/feedback";
 import { getQualityReport, recomputeFactRatings, quarantineLowQualityFacts } from "./db/quality";
+import { verifyWithWikipedia } from "./verification/wiki";
 
 dotenv.config();
 
@@ -408,6 +409,58 @@ bot.command("recalc", async (ctx) => {
   quarantineLowQualityFacts(db);
   await ctx.reply("Рейтинг пересчитан, карантин обновлён");
 });
+
+function markRoundVerified(db: ReturnType<typeof openDb>, roundId: string) {
+  db.prepare(`UPDATE rounds SET verified=1 WHERE id=?`).run(roundId);
+}
+
+bot.command("verify", async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId || !ADMIN_IDS.has(userId)) return;
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const session = getOrCreateSession(chatId);
+  const idx = session.currentIndex;
+  const round = session.rounds[idx];
+  const roundId = session.roundIds?.[idx];
+  if (!round || !roundId) {
+    await ctx.reply("Нет раунда для проверки");
+    return;
+  }
+  await ctx.reply("Проверяю через Wikipedia...");
+  const q = await verifyWithWikipedia(round.question.text, round.question.sourceUrl);
+  const h1 = await verifyWithWikipedia(round.hint1.text, round.hint1.sourceUrl);
+  const h2 = await verifyWithWikipedia(round.hint2.text, round.hint2.sourceUrl);
+  const ok = q.ok && h1.ok && h2.ok;
+  if (ok) {
+    markRoundVerified(db, roundId);
+    await ctx.reply("OK: verified=1 для раунда");
+  } else {
+    await ctx.reply(`FAILED: q=${q.ok} h1=${h1.ok} h2=${h2.ok}`);
+  }
+});
+
+// Background generation + verification
+const ENABLE_BG_GEN = process.env.ENABLE_BG_GEN === "1";
+const BG_GEN_INTERVAL_SEC = Number(process.env.BG_GEN_INTERVAL_SEC || 600);
+
+async function backgroundGenerationTick() {
+  try {
+    const gen = await generateOneRound();
+    const bundle = toBundleFromGenerated(gen);
+    const roundId = ensureFactsAndRound(db, bundle);
+    const q = await verifyWithWikipedia(bundle.question.text, bundle.question.sourceUrl);
+    const h1 = await verifyWithWikipedia(bundle.hint1.text, bundle.hint1.sourceUrl);
+    const h2 = await verifyWithWikipedia(bundle.hint2.text, bundle.hint2.sourceUrl);
+    if (q.ok && h1.ok && h2.ok) {
+      markRoundVerified(db, roundId);
+    }
+  } catch {}
+}
+
+if (ENABLE_BG_GEN) {
+  setInterval(backgroundGenerationTick, BG_GEN_INTERVAL_SEC * 1000);
+}
 
 bot.catch((err) => {
   console.error("Bot error:", err);
