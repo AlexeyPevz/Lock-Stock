@@ -1,0 +1,146 @@
+[
+  {
+    "number": 88,
+    "question": {
+      "id": "q-88-piano",
+      "number": 88,
+      "domain": "music",
+      "text": "Сколько клавиш у стандартного фортепиано?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%A4%D0%BE%D1%80%D1%82%D0%B5%D0%BF%D0%B8%D0%B0%D0%BD%D0%BE"
+    },
+    "hint1": {
+      "id": "h1-88-bttf",
+      "number": 88,
+      "domain": "movies",
+      "text": "До какой скорости в милях в час должен был разогнаться DeLorean в фильме 'Назад в будущее'?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Назад_в_будущее"
+    },
+    "hint2": {
+      "id": "h2-88-constellations",
+      "number": 88,
+      "domain": "science",
+      "text": "Сколько официальных созвездий выделяет Международный астрономический союз?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%A1%D0%BE%D0%B7%D0%B2%D0%B5%D0%B7%D0%B4%D0%B8%D0%B5"
+    }
+  },
+  {
+    "number": 12,
+    "question": {
+      "id": "q-12-months",
+      "number": 12,
+      "domain": "geography",
+      "text": "Сколько месяцев в григорианском календаре?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%9C%D0%B5%D1%81%D1%8F%D1%86"
+    },
+    "hint1": {
+      "id": "h1-12-heracles",
+      "number": 12,
+      "domain": "history",
+      "text": "Сколько подвигов, по мифам, совершил Геракл?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%9F%D0%BE%D0%B4%D0%B2%D0%B8%D0%B3%D0%B8_%D0%93%D0%B5%D1%80%D0%B0%D0%BA%D0%BB%D0%B0"
+    },
+    "hint2": {
+      "id": "h2-12-semitones",
+      "number": 12,
+      "domain": "music",
+      "text": "Сколько полутонов в октаве в равномерно темперированном строе?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%9E%D0%BA%D1%82%D0%B0%D0%B2%D0%B0"
+    }
+  },
+  {
+    "number": 52,
+    "question": {
+      "id": "q-52-cards",
+      "number": 52,
+      "domain": "other",
+      "text": "Сколько карт в стандартной игральной колоде без джокеров?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%98%D0%B3%D1%80%D0%B0%D0%BB%D1%8C%D0%BD%D1%8B%D0%B5_%D0%BA%D0%B0%D1%80%D1%82%D1%8B"
+    },
+    "hint1": {
+      "id": "h1-52-weeks",
+      "number": 52,
+      "domain": "geography",
+      "text": "Сколько полных недель в календарном году (примерно)?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%9D%D0%B5%D0%B4%D0%B5%D0%BB%D1%8F"
+    },
+    "hint2": {
+      "id": "h2-52-piano-white",
+      "number": 52,
+      "domain": "music",
+      "text": "Сколько белых клавиш у стандартного фортепиано?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%A4%D0%BE%D1%80%D1%82%D0%B5%D0%BF%D0%B8%D0%B0%D0%BD%D0%BE"
+    }
+  },
+  {
+    "number": 64,
+    "question": {
+      "id": "q-64-chess",
+      "number": 64,
+      "domain": "sports",
+      "text": "Сколько клеток на стандартной шахматной доске?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%A8%D0%B0%D1%85%D0%BC%D0%B0%D1%82%D0%BD%D0%B0%D1%8F_%D0%B4%D0%BE%D1%81%D0%BA%D0%B0"
+    },
+    "hint1": {
+      "id": "h1-64-bits",
+      "number": 64,
+      "domain": "science",
+      "text": "Сколько бит содержит 8 байт?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%91%D0%B0%D0%B9%D1%82"
+    },
+    "hint2": {
+      "id": "h2-64-n64",
+      "number": 64,
+      "domain": "pop_culture",
+      "text": "Какое число в названии игровой приставки Nintendo, вышедшей в 1996 году?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Nintendo_64"
+    }
+  },
+  {
+    "number": 100,
+    "question": {
+      "id": "q-100-century",
+      "number": 100,
+      "domain": "history",
+      "text": "Сколько лет составляет один век?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%92%D0%B5%D0%BA"
+    },
+    "hint1": {
+      "id": "h1-100-cents",
+      "number": 100,
+      "domain": "other",
+      "text": "Сколько центов в одном долларе США?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%94%D0%BE%D0%BB%D0%BB%D0%B0%D1%80_%D0%A1%D0%A8%D0%90"
+    },
+    "hint2": {
+      "id": "h2-100-boiling",
+      "number": 100,
+      "domain": "science",
+      "text": "При нормальном давлении, сколько градусов Цельсия составляет температура кипения воды?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%92%D0%BE%D0%B4%D0%B0#%D0%A4%D0%B8%D0%B7%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B5_%D1%81%D0%B2%D0%BE%D0%B9%D1%81%D1%82%D0%B2%D0%B0"
+    }
+  },
+  {
+    "number": 360,
+    "question": {
+      "id": "q-360-circle",
+      "number": 360,
+      "domain": "science",
+      "text": "Сколько градусов в полном круге?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%93%D1%80%D0%B0%D0%B4%D1%83%D1%81_(%D1%83%D0%B3%D0%BE%D0%BB)"
+    },
+    "hint1": {
+      "id": "h1-360-days",
+      "number": 360,
+      "domain": "history",
+      "text": "Сколько дней насчитывал условный круглый год в некоторых древних календарях?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/%D0%93%D0%BE%D0%B4#%D0%94%D1%80%D0%B5%D0%B2%D0%BD%D0%B8%D0%B5_%D0%BA%D0%B0%D0%BB%D0%B5%D0%BD%D0%B4%D0%B0%D1%80%D0%B8"
+    },
+    "hint2": {
+      "id": "h2-360-xbox",
+      "number": 360,
+      "domain": "pop_culture",
+      "text": "Какое число в названии игровой консоли от Microsoft, вышедшей в 2005 году?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Xbox_360"
+    }
+  }
+]
