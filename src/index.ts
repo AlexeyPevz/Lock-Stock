@@ -40,6 +40,7 @@ const ADMIN_IDS = new Set(
 const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || 5);
 const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || 15);
 const CONTENT_PACK_PATH = process.env.CONTENT_PACK_PATH || "./content/pack.default.json";
+const ADMIN_LOG_CHAT_ID = Number(process.env.ADMIN_LOG_CHAT_ID || 0);
 
 // In-memory sessions by chat id
 const sessions = new Map<number, GameSession>();
@@ -410,6 +411,12 @@ bot.command("recalc", async (ctx) => {
   await ctx.reply("Рейтинг пересчитан, карантин обновлён");
 });
 
+async function adminLog(text: string) {
+  try {
+    if (ADMIN_LOG_CHAT_ID) await bot.api.sendMessage(ADMIN_LOG_CHAT_ID, text);
+  } catch {}
+}
+
 function markRoundVerified(db: ReturnType<typeof openDb>, roundId: string) {
   db.prepare(`UPDATE rounds SET verified=1 WHERE id=?`).run(roundId);
 }
@@ -435,8 +442,10 @@ bot.command("verify", async (ctx) => {
   if (ok) {
     markRoundVerified(db, roundId);
     await ctx.reply("OK: verified=1 для раунда");
+    await adminLog(`Verified round ${roundId} (#${round.number}) by @${ctx.from?.username || ctx.from?.id}`);
   } else {
     await ctx.reply(`FAILED: q=${q.ok} h1=${h1.ok} h2=${h2.ok}`);
+    await adminLog(`Verify FAILED for ${roundId}: q=${q.ok} h1=${h1.ok} h2=${h2.ok}`);
   }
 });
 
@@ -454,8 +463,13 @@ async function backgroundGenerationTick() {
     const h2 = await verifyWithWikipedia(bundle.hint2.text, bundle.hint2.sourceUrl);
     if (q.ok && h1.ok && h2.ok) {
       markRoundVerified(db, roundId);
+      await adminLog(`BG verified round ${roundId} (#${bundle.number})`);
+    } else {
+      await adminLog(`BG verify failed ${roundId}: q=${q.ok} h1=${h1.ok} h2=${h2.ok}`);
     }
-  } catch {}
+  } catch (e: any) {
+    await adminLog(`BG generation error: ${e?.message || e}`);
+  }
 }
 
 if (ENABLE_BG_GEN) {
