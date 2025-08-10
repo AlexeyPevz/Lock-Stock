@@ -1,26 +1,45 @@
-import { Bot, InlineKeyboard, Context, session, SessionFlavor } from "grammy";
+import { Bot, Context, session, SessionFlavor } from "grammy";
 import dotenv from "dotenv";
 import { z } from "zod";
-import { RoundBundle, Session as GameSession, RevealState } from "./types";
-// import { sampleRounds } from "./data/sampleRounds";
-import { loadPack } from "./content/provider";
-import { renderRoundText } from "./utils/render";
-import { generateOneRound } from "./generation/generator";
+import { Session as GameSession } from "./types";
 import { openDb } from "./db/client";
-import { selectNextRound, markRoundSeen } from "./db/selector";
-import { getRoundBundleById } from "./db/rounds";
-import { ensureFactsAndRound } from "./db/upsert";
-import { saveRoundFeedback } from "./db/feedback";
-import { getQualityReport, recomputeFactRatings, quarantineLowQualityFacts } from "./db/quality";
+import { logger } from "./utils/logger";
+import { createErrorHandler } from "./utils/errors";
+import { HealthChecker } from "./utils/health";
+import {
+  handleStart,
+  handleRules,
+  handlePremium,
+  handleHelp,
+  handleNewGame,
+  handleGenerate,
+  handleQuality,
+  handleRecalc,
+  CommandHandlerDeps,
+} from "./handlers/commands";
+import {
+  handleReveal,
+  handleFeedback,
+  handleRoundNext,
+  handleRoundSkip,
+  handleTimer,
+  handleShowRules,
+  CallbackHandlerDeps,
+} from "./handlers/callbacks";
 import { verifyWithWikipedia } from "./verification/wiki";
+import { generateOneRound } from "./generation/generator";
+import { ensureFactsAndRound } from "./db/upsert";
+import { SqliteRoundRepository } from "./db/repository";
 
 dotenv.config();
 
+// Environment validation
 const EnvSchema = z.object({
   BOT_TOKEN: z.string().min(1, "BOT_TOKEN is required"),
   ADMIN_USER_IDS: z.string().optional(),
   FREE_ROUNDS: z.string().optional(),
   PREMIUM_ROUNDS: z.string().optional(),
+  LOG_LEVEL: z.string().optional(),
 });
 
 const parsedEnv = EnvSchema.safeParse(process.env);
@@ -29,6 +48,7 @@ if (!parsedEnv.success) {
   process.exit(1);
 }
 
+// Configuration
 const BOT_TOKEN = parsedEnv.data.BOT_TOKEN;
 const ADMIN_IDS = new Set(
   (parsedEnv.data.ADMIN_USER_IDS || "")
@@ -41,445 +61,225 @@ const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || 5);
 const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || 15);
 const CONTENT_PACK_PATH = process.env.CONTENT_PACK_PATH || "./content/pack.default.json";
 const ADMIN_LOG_CHAT_ID = Number(process.env.ADMIN_LOG_CHAT_ID || 0);
+const ENABLE_BG_GEN = process.env.ENABLE_BG_GEN === "1";
+const BG_GEN_INTERVAL_SEC = Number(process.env.BG_GEN_INTERVAL_SEC || 600);
+const HEALTH_CHECK_INTERVAL = Number(process.env.HEALTH_CHECK_INTERVAL || 300);
 
-// In-memory sessions by chat id
+// Initialize dependencies
 const sessions = new Map<number, GameSession>();
 const db = openDb();
 
-// Session middleware placeholder (using grammy session for per-user misc if needed)
-interface BotSessionData { /* future */ }
-
+// Session middleware
+interface BotSessionData {}
 type MyContext = Context & SessionFlavor<BotSessionData>;
 
+// Initialize bot
 const bot = new Bot<MyContext>(BOT_TOKEN);
 
+// Set commands
 bot.api.setMyCommands([
   { command: "start", description: "Начать" },
   { command: "newgame", description: "Новая игра (пачка раундов)" },
   { command: "rules", description: "Правила (кратко)" },
   { command: "premium", description: "Премиум и Stars" },
-  { command: "gen", description: "[админ] Сгенерировать N раундов" },
   { command: "help", description: "Помощь" },
 ]);
 
+// Session middleware
 bot.use(
   session({
     initial: (): BotSessionData => ({}),
   })
 );
 
-function createInitialReveal(): RevealState {
-  return { showQuestion: true, showHint1: false, showHint2: false, showAnswer: false };
-}
+// Dependencies for handlers
+const commandDeps: CommandHandlerDeps = {
+  db,
+  sessions,
+  adminIds: ADMIN_IDS,
+  contentPackPath: CONTENT_PACK_PATH,
+  freeRounds: DEFAULT_FREE,
+  premiumRounds: DEFAULT_PREMIUM,
+};
 
-function buildHostKeyboard(state: RevealState, canSkip: boolean) {
-  const k = new InlineKeyboard();
-  k.text(state.showQuestion ? "Вопрос ✓" : "Показать вопрос", "reveal:question");
-  k.row();
-  k.text(state.showHint1 ? "Подсказка 1 ✓" : "Показать подсказку 1", "reveal:hint1");
-  k.row();
-  k.text(state.showHint2 ? "Подсказка 2 ✓" : "Показать подсказку 2", "reveal:hint2");
-  k.row();
-  k.text(state.showAnswer ? "Ответ ✓" : "Показать ответ", "reveal:answer");
-  k.row();
-  k.text("Таймер 30", "timer:30").text("Таймер 60", "timer:60").text("Таймер 90", "timer:90");
-  k.row();
-  if (canSkip) k.text("Скип раунда", "round:skip");
-  k.text("Правила", "show:rules");
-  return k;
-}
+const callbackDeps: CallbackHandlerDeps = {
+  db,
+  sessions,
+  bot,
+};
 
-function buildFeedbackKeyboard(roundId: string, number: number) {
-  const k = new InlineKeyboard();
-  k.text("★1", `fb:rate:${roundId}:${number}:1`).text("★2", `fb:rate:${roundId}:${number}:2`).text("★3", `fb:rate:${roundId}:${number}:3`).row();
-  k.text("★4", `fb:rate:${roundId}:${number}:4`).text("★5", `fb:rate:${roundId}:${number}:5`).row();
-  k.text("Сложно", `fb:cat:${roundId}:${number}:hard`).text("Легко", `fb:cat:${roundId}:${number}:easy`).row();
-  k.text("Спорно", `fb:cat:${roundId}:${number}:controversial`).text("Узкая тема", `fb:cat:${roundId}:${number}:niche`).row();
-  k.text("Формулировка", `fb:cat:${roundId}:${number}:wording`).text("Устарело", `fb:cat:${roundId}:${number}:outdated`);
-  return k;
-}
+// Command handlers
+bot.command("start", (ctx) => handleStart(ctx));
+bot.command("rules", (ctx) => handleRules(ctx));
+bot.command("premium", (ctx) => handlePremium(ctx));
+bot.command("help", (ctx) => handleHelp(ctx));
+bot.command("newgame", (ctx) => handleNewGame(ctx, commandDeps));
+bot.command("gen", (ctx) => handleGenerate(ctx, commandDeps));
+bot.command("quality", (ctx) => handleQuality(ctx, commandDeps));
+bot.command("recalc", (ctx) => handleRecalc(ctx, commandDeps));
 
-function getOrCreateSession(chatId: number): GameSession {
-  const existing = sessions.get(chatId);
-  if (existing) return existing;
-  const gs: GameSession = {
-    chatId,
-    rounds: [],
-    currentIndex: 0,
-    revealed: {},
-    freeLimit: DEFAULT_FREE,
-    premiumTotal: DEFAULT_PREMIUM,
-    isPremium: false,
-  };
-  sessions.set(chatId, gs);
-  return gs;
-}
-
-let cachedPack: RoundBundle[] | null = null;
-function reloadContentPack(): RoundBundle[] {
-  cachedPack = loadPack(CONTENT_PACK_PATH);
-  return cachedPack;
-}
-
-function selectRoundsForSession(isPremium: boolean): RoundBundle[] {
-  const pack = cachedPack ?? reloadContentPack();
-  const total = isPremium ? DEFAULT_PREMIUM : DEFAULT_FREE;
-  return pack.slice(0, Math.min(total, pack.length));
-}
-
-function toBundleFromGenerated(gen: {question: string; hint1: string; hint2: string; answer: number;}): RoundBundle {
-  const idBase = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  // Domain detection could be added; for now keep "other"
-  return {
-    number: gen.answer,
-    question: { id: `${idBase}-q`, number: gen.answer, domain: "other", text: gen.question },
-    hint1: { id: `${idBase}-h1`, number: gen.answer, domain: "other", text: gen.hint1 },
-    hint2: { id: `${idBase}-h2`, number: gen.answer, domain: "other", text: gen.hint2 },
-  };
-}
-
-bot.command("start", async (ctx) => {
-  await ctx.reply(
-    "Lock Stock Question Bot — офлайн-помощник для домашней игры. Используйте /newgame, чтобы начать новую пачку раундов."
-  );
-});
-
-bot.command("rules", async (ctx) => {
-  await ctx.reply(
-    [
-      "Краткие правила:",
-      "- В начале раунда все делают обязательную ставку и пишут ответ (менять нельзя)",
-      "- Можно: рейз, чек (бесплатная подсказка), пас",
-      "- Ведущий по кнопкам открывает Подсказку 1, Подсказку 2 и Ответ",
-      "- После каждой подсказки — новые решения",
-      "- Побеждает ответ ближе к правильному",
-    ].join("\n")
-  );
-});
-
-bot.command("premium", async (ctx) => {
-  await ctx.reply(
-    "Премиум: +10 раундов в сессии за Telegram Stars (MVP: заглушка). Доступно 5 бесплатных раундов."
-  );
-});
-
-bot.command("help", async (ctx) => {
-  await ctx.reply("Команды: /start, /newgame, /rules, /premium, /help");
-});
-
-bot.command("newgame", async (ctx) => {
-  const chatId = ctx.chat?.id;
-  if (!chatId) return;
-  const session = getOrCreateSession(chatId);
-  session.isPremium = false; // start as free
-  session.rounds = selectRoundsForSession(session.isPremium);
-  session.currentIndex = 0;
-  session.revealed = {};
-
-  await sendOrUpdateRound(ctx, session);
-});
-
-async function sendOrUpdateRound(ctx: MyContext, session: GameSession) {
-  const chatId = session.chatId;
-  const userId = ctx.from?.id || chatId; // group host treated as user
-
-  const index = session.currentIndex;
-  if (index >= session.rounds.length) {
-    // Try to fetch a new round from DB (unique by user)
-    const picked = selectNextRound(db, userId);
-    if (!picked) {
-      await ctx.reply("Раунды закончились! Спасибо за игру.");
-      return;
-    }
-    const bundle = getRoundBundleById(db, picked.round_id);
-    if (!bundle) {
-      await ctx.reply("Ошибка загрузки раунда из базы");
-      return;
-    }
-    markRoundSeen(db, userId, picked.round_id, picked.number);
-
-    // Render full round
-    const state = createInitialReveal();
-    const text = renderRoundText(bundle, state);
-    session.roundIds = session.roundIds || {};
-    session.roundIds[session.currentIndex] = picked.round_id;
-    const keyboard = buildHostKeyboard(state, allowSkipForSession(session));
-    await ctx.reply(text, { reply_markup: keyboard });
-    return;
-  }
-  const round = session.rounds[index];
-  const state = session.revealed[index] || createInitialReveal();
-  session.revealed[index] = state;
-
-  const text = renderRoundText(round, state);
-  const canSkip = allowSkipForSession(session);
-  const keyboard = buildHostKeyboard(state, canSkip);
-  await ctx.reply(text, { reply_markup: keyboard });
-}
-
-function allowSkipForSession(session: GameSession): boolean {
-  // MVP: разрешаем 2 скипа за сессию
-  const usedSkips = Object.values(session.revealed).filter((s) => s.showAnswer && s.showQuestion && s.showHint1 && s.showHint2).length;
-  return usedSkips < 2;
-}
-
-bot.callbackQuery(/reveal:(question|hint1|hint2|answer)/, async (ctx) => {
-  const chatId = ctx.chat?.id;
-  if (!chatId) return ctx.answerCallbackQuery();
-  const session = getOrCreateSession(chatId);
-  const index = session.currentIndex;
-  if (index >= session.rounds.length) return ctx.answerCallbackQuery();
-
-  const state = session.revealed[index] || createInitialReveal();
-  session.revealed[index] = state;
-  const [, what] = ctx.callbackQuery.data.split(":");
-  if (what === "question") state.showQuestion = true;
-  if (what === "hint1") state.showHint1 = true;
-  if (what === "hint2") state.showHint2 = true;
-  if (what === "answer") state.showAnswer = true;
-
-  const round = session.rounds[index];
-  const replyMarkup = state.showAnswer && session.roundIds?.[index]
-    ? buildFeedbackKeyboard(session.roundIds[index], round.number)
-    : buildHostKeyboard(state, allowSkipForSession(session));
-  await ctx.editMessageText(renderRoundText(round, state), {
-    reply_markup: replyMarkup,
-  });
-  await ctx.answerCallbackQuery();
-});
-
-bot.callbackQuery(/fb:(rate|cat):(.+?):(\d+):(\w+)/, async (ctx) => {
-  const userId = ctx.from?.id;
-  if (!userId) return ctx.answerCallbackQuery();
-  const [, kind, roundId, numberStr, value] = ctx.match as unknown as [string, string, string, string, string];
-  const number = Number(numberStr);
-  if (kind === "rate") {
-    const rating = Number(value);
-    if (rating >= 1 && rating <= 5) saveRoundFeedback(db, userId, roundId, number, rating, null);
-  } else if (kind === "cat") {
-    saveRoundFeedback(db, userId, roundId, number, null, value);
-  }
-  await ctx.answerCallbackQuery({ text: "Спасибо за отзыв!" });
-});
-
-bot.callbackQuery("round:skip", async (ctx) => {
-  const chatId = ctx.chat?.id;
-  if (!chatId) return ctx.answerCallbackQuery();
-  const session = getOrCreateSession(chatId);
-
-  if (!allowSkipForSession(session)) {
-    await ctx.answerCallbackQuery({ text: "Лимит скипов исчерпан", show_alert: true });
-    return;
-  }
-  session.currentIndex += 1;
-  // reset message by sending a new one
-  await ctx.answerCallbackQuery();
-  await sendOrUpdateRound(ctx, session);
-});
-
-bot.callbackQuery("show:rules", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.reply(
-    [
-      "Краткие правила:",
-      "- Обязательная ставка, ответ пишется один раз",
-      "- Чек = получить подсказку без ставок",
-      "- После каждой подсказки — новые решения",
-      "- Побеждает ближайший к правильному ответ",
-    ].join("\n")
-  );
-});
-
-bot.callbackQuery(/timer:(30|60|90)/, async (ctx) => {
-  const seconds = Number(ctx.match![1]);
-  await ctx.answerCallbackQuery();
-  const message = await ctx.reply(`Таймер: ${seconds}с`);
-
-  const checkpoints = [Math.floor(seconds / 2), 10, 5, 0]
-    .filter((s, i, arr) => s > 0 || i === arr.length - 1)
-    .filter((v, i, a) => a.indexOf(v) === i) // unique
-    .sort((a, b) => b - a);
-
-  for (const cp of checkpoints) {
-    const delay = (seconds - cp) * 1000;
-    setTimeout(async () => {
-      try {
-        if (cp > 0) {
-          await ctx.api.editMessageText(message.chat.id, message.message_id, `Таймер: ${cp}с`);
-        } else {
-          await ctx.api.editMessageText(message.chat.id, message.message_id, "Таймер: стоп");
-        }
-      } catch {
-        // ignore edit errors
-      }
-    }, delay);
-  }
-});
-
-bot.command("gen", async (ctx) => {
-  const userId = ctx.from?.id;
-  if (!userId || !ADMIN_IDS.has(userId)) {
-    await ctx.reply("Недостаточно прав");
-    return;
-  }
-  const chatId = ctx.chat?.id;
-  if (!chatId) return;
-  const session = getOrCreateSession(chatId);
-
-  const text = ctx.message?.text || "";
-  const parts = text.split(/\s+/);
-  const count = Math.min(Math.max(Number(parts[1] || 1) || 1, 1), 15);
-  await ctx.reply(`Генерация ${count} раунд(ов)…`);
-
-  const generated: RoundBundle[] = [];
-  const seenAnswers = new Set<number>();
-  // include answers already used in current pack/session to avoid reuse
-  for (const r of session.rounds) seenAnswers.add(r.number);
-  if (cachedPack) for (const r of cachedPack) seenAnswers.add(r.number);
-
-  for (let i = 0; i < count; i++) {
-    try {
-      let attempt = 0;
-      while (attempt < 3) {
-        attempt += 1;
-        const gen = await generateOneRound();
-        if (seenAnswers.has(gen.answer)) {
-          continue; // regenerate silently per rule 8
-        }
-        seenAnswers.add(gen.answer);
-        generated.push(toBundleFromGenerated(gen));
-        break;
-      }
-    } catch (e: any) {
-      await ctx.reply(`Ошибка генерации: ${e?.message ?? e}`);
-      break;
-    }
-  }
-
-  if (generated.length === 0) {
-    await ctx.reply("Не удалось сгенерировать раунды");
-    return;
-  }
-
-  // Save into DB for future reuse
-  for (const r of generated) {
-    ensureFactsAndRound(db, r);
-  }
-
-  session.isPremium = false;
-  session.rounds = generated.concat(selectRoundsForSession(session.isPremium));
-  session.currentIndex = 0;
-  session.revealed = {};
-
-  await sendOrUpdateRound(ctx, session);
-});
-
-bot.command("reload", async (ctx) => {
-  const userId = ctx.from?.id;
-  if (!userId || !ADMIN_IDS.has(userId)) {
-    await ctx.reply("Недостаточно прав");
-    return;
-  }
-  try {
-    const rounds = reloadContentPack();
-    await ctx.reply(`Пак перезагружен: ${rounds.length} раундов`);
-  } catch (e: any) {
-    await ctx.reply(`Ошибка перезагрузки: ${e?.message ?? e}`);
-  }
-});
-
-bot.command("quality", async (ctx) => {
-  const userId = ctx.from?.id;
-  if (!userId || !ADMIN_IDS.has(userId)) return;
-  const report = getQualityReport(db);
-  await ctx.reply(
-    [
-      `Фактов: ${report.totals.facts}`,
-      `Карантин: ${report.totals.quarantined}`,
-      `Средний рейтинг: ${report.totals.avg_rating ?? "-"}`,
-      "Худшие по рейтингу:",
-      ...report.worst.map((w) => `- ${w.id} (#${w.number}, ${w.domain}) = ${w.rating ?? "-"}`),
-    ].join("\n")
-  );
-});
-
-bot.command("recalc", async (ctx) => {
-  const userId = ctx.from?.id;
-  if (!userId || !ADMIN_IDS.has(userId)) return;
-  recomputeFactRatings(db);
-  quarantineLowQualityFacts(db);
-  await ctx.reply("Рейтинг пересчитан, карантин обновлён");
-});
-
-async function adminLog(text: string) {
-  try {
-    if (ADMIN_LOG_CHAT_ID) await bot.api.sendMessage(ADMIN_LOG_CHAT_ID, text);
-  } catch {}
-}
-
-function markRoundVerified(db: ReturnType<typeof openDb>, roundId: string) {
-  db.prepare(`UPDATE rounds SET verified=1 WHERE id=?`).run(roundId);
-}
-
+// Admin-only verify command
 bot.command("verify", async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId || !ADMIN_IDS.has(userId)) return;
+
   const chatId = ctx.chat?.id;
   if (!chatId) return;
-  const session = getOrCreateSession(chatId);
-  const idx = session.currentIndex;
-  const round = session.rounds[idx];
-  const roundId = session.roundIds?.[idx];
-  if (!round || !roundId) {
+
+  const session = sessions.get(chatId);
+  if (!session || !session.rounds[session.currentIndex]) {
     await ctx.reply("Нет раунда для проверки");
     return;
   }
+
+  const round = session.rounds[session.currentIndex];
+  const roundId = session.roundIds?.[session.currentIndex];
+  if (!roundId) {
+    await ctx.reply("ID раунда не найден");
+    return;
+  }
+
   await ctx.reply("Проверяю через Wikipedia...");
+
   const q = await verifyWithWikipedia(round.question.text, round.question.sourceUrl);
   const h1 = await verifyWithWikipedia(round.hint1.text, round.hint1.sourceUrl);
   const h2 = await verifyWithWikipedia(round.hint2.text, round.hint2.sourceUrl);
+
   const ok = q.ok && h1.ok && h2.ok;
   if (ok) {
-    markRoundVerified(db, roundId);
-    await ctx.reply("OK: verified=1 для раунда");
+    const roundRepo = new SqliteRoundRepository(db);
+    roundRepo.markAsVerified(roundId);
+    await ctx.reply("✅ Раунд верифицирован");
     await adminLog(`Verified round ${roundId} (#${round.number}) by @${ctx.from?.username || ctx.from?.id}`);
   } else {
-    await ctx.reply(`FAILED: q=${q.ok} h1=${h1.ok} h2=${h2.ok}`);
-    await adminLog(`Verify FAILED for ${roundId}: q=${q.ok} h1=${h1.ok} h2=${h2.ok}`);
+    await ctx.reply(`❌ Проверка не пройдена: Q=${q.ok} H1=${h1.ok} H2=${h2.ok}`);
+    await adminLog(`Verify FAILED for ${roundId}: Q=${q.ok} H1=${h1.ok} H2=${h2.ok}`);
   }
 });
 
-// Background generation + verification
-const ENABLE_BG_GEN = process.env.ENABLE_BG_GEN === "1";
-const BG_GEN_INTERVAL_SEC = Number(process.env.BG_GEN_INTERVAL_SEC || 600);
+// Callback query handlers
+bot.callbackQuery(/reveal:(question|hint1|hint2|answer)/, (ctx) => handleReveal(ctx, callbackDeps));
+bot.callbackQuery(/fb:(rate|cat):(.+?):(\d+):(\w+)/, (ctx) => handleFeedback(ctx, callbackDeps));
+bot.callbackQuery("round:next", (ctx) => handleRoundNext(ctx, callbackDeps));
+bot.callbackQuery("round:skip", (ctx) => handleRoundSkip(ctx, callbackDeps));
+bot.callbackQuery(/timer:(30|60|90)/, (ctx) => handleTimer(ctx, callbackDeps));
+bot.callbackQuery("show:rules", (ctx) => handleShowRules(ctx));
 
+// Admin logging helper
+async function adminLog(text: string) {
+  try {
+    if (ADMIN_LOG_CHAT_ID) {
+      await bot.api.sendMessage(ADMIN_LOG_CHAT_ID, text);
+    }
+      } catch (error: any) {
+      logger.error("Failed to send admin log", { error, text });
+  }
+}
+
+// Background generation
 async function backgroundGenerationTick() {
   try {
     const gen = await generateOneRound();
-    const bundle = toBundleFromGenerated(gen);
+    const bundle = {
+      number: gen.answer,
+      question: {
+        id: `gen-q-${Date.now()}`,
+        number: gen.answer,
+        domain: "other" as const,
+        text: gen.question,
+      },
+      hint1: {
+        id: `gen-h1-${Date.now()}`,
+        number: gen.answer,
+        domain: "other" as const,
+        text: gen.hint1,
+      },
+      hint2: {
+        id: `gen-h2-${Date.now()}`,
+        number: gen.answer,
+        domain: "other" as const,
+        text: gen.hint2,
+      },
+    };
+
     const roundId = ensureFactsAndRound(db, bundle);
-    const q = await verifyWithWikipedia(bundle.question.text, bundle.question.sourceUrl);
-    const h1 = await verifyWithWikipedia(bundle.hint1.text, bundle.hint1.sourceUrl);
-    const h2 = await verifyWithWikipedia(bundle.hint2.text, bundle.hint2.sourceUrl);
+
+    const q = await verifyWithWikipedia(bundle.question.text);
+    const h1 = await verifyWithWikipedia(bundle.hint1.text);
+    const h2 = await verifyWithWikipedia(bundle.hint2.text);
+
     if (q.ok && h1.ok && h2.ok) {
-      markRoundVerified(db, roundId);
-      await adminLog(`BG verified round ${roundId} (#${bundle.number})`);
+      const roundRepo = new SqliteRoundRepository(db);
+      roundRepo.markAsVerified(roundId);
+      await adminLog(`✅ BG verified round ${roundId} (#${bundle.number})`);
     } else {
-      await adminLog(`BG verify failed ${roundId}: q=${q.ok} h1=${h1.ok} h2=${h2.ok}`);
+      await adminLog(`❌ BG verify failed ${roundId}: Q=${q.ok} H1=${h1.ok} H2=${h2.ok}`);
     }
-  } catch (e: any) {
-    await adminLog(`BG generation error: ${e?.message || e}`);
+  } catch (error: any) {
+    logger.error("Background generation error", { error });
+    await adminLog(`🚨 BG generation error: ${error?.message || error}`);
   }
 }
 
-if (ENABLE_BG_GEN) {
-  setInterval(backgroundGenerationTick, BG_GEN_INTERVAL_SEC * 1000);
-}
+// Health monitoring
+const healthChecker = new HealthChecker(db, sessions);
 
-bot.catch((err) => {
-  console.error("Bot error:", err);
+// Error handling
+const errorHandler = createErrorHandler({
+  adminIds: ADMIN_IDS,
+  adminLogChatId: ADMIN_LOG_CHAT_ID,
+  bot,
 });
 
+bot.catch((err) => errorHandler(err, null as any));
+
+// Graceful shutdown
+let isShuttingDown = false;
+
+async function shutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  logger.info(`Received ${signal}, shutting down gracefully...`);
+
+  try {
+    // Stop accepting new updates
+    await bot.stop();
+
+    // Close database
+    db.close();
+
+    logger.info("Shutdown complete");
+    process.exit(0);
+      } catch (error: any) {
+      logger.error("Error during shutdown", { error });
+    process.exit(1);
+  }
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+// Start bot
 if (process.env.NODE_ENV !== "test") {
-  bot.start().then(() => console.log("Bot started"));
+  // Background tasks
+  if (ENABLE_BG_GEN) {
+    setInterval(backgroundGenerationTick, BG_GEN_INTERVAL_SEC * 1000);
+    logger.info("Background generation enabled", { intervalSec: BG_GEN_INTERVAL_SEC });
+  }
+
+  // Health monitoring
+  setInterval(() => healthChecker.logHealth(), HEALTH_CHECK_INTERVAL * 1000);
+
+  // Start bot
+  bot.start({
+    onStart: () => {
+      logger.info("Bot started", {
+        adminIds: Array.from(ADMIN_IDS),
+        freeRounds: DEFAULT_FREE,
+        premiumRounds: DEFAULT_PREMIUM,
+        bgGeneration: ENABLE_BG_GEN,
+      });
+    },
+  });
 }

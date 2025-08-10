@@ -12,8 +12,13 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "ts-node-dev --transpile-only src/scripts/seed.ts",
+    "seed:all": "ts-node-dev --transpile-only src/scripts/seed-all.ts",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean"
   },
   "engines": {
     "node": ">=20"

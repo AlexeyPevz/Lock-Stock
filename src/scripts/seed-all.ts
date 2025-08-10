@@ -57,9 +57,9 @@ async function main() {
   console.log(`\nTotal rounds imported: ${totalRounds.length}`);
   
   // Show final statistics
-  const roundCount = db.prepare("SELECT COUNT(*) as count FROM rounds").get();
-  const factCount = db.prepare("SELECT COUNT(*) as count FROM facts_by_number").get();
-  const uniqueNumbers = db.prepare("SELECT COUNT(DISTINCT number) as count FROM rounds").get();
+  const roundCount = db.prepare("SELECT COUNT(*) as count FROM rounds").get() as { count: number };
+  const factCount = db.prepare("SELECT COUNT(*) as count FROM facts_by_number").get() as { count: number };
+  const uniqueNumbers = db.prepare("SELECT COUNT(DISTINCT number) as count FROM rounds").get() as { count: number };
   
   console.log(`\nDatabase statistics:`);
   console.log(`- Total rounds in DB: ${roundCount.count}`);
