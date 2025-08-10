@@ -1,0 +1,770 @@
+[
+  {
+    "number": 366,
+    "question": {
+      "id": "q-366-leap",
+      "number": 366,
+      "domain": "science",
+      "text": "Сколько дней в високосном году?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Високосный_год"
+    },
+    "hint1": {
+      "id": "h1-366-bible",
+      "number": 366,
+      "domain": "other",
+      "text": "Сколько стихов для ежедневного чтения содержит популярный христианский календарь?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Ежедневное_чтение_Библии"
+    },
+    "hint2": {
+      "id": "h2-366-days",
+      "number": 366,
+              "domain": "other",
+        "text": "Сколько дней по-испански означает 'год' (dias del año)?",
+        "sourceUrl": "https://ru.wikipedia.org/wiki/Испанский_язык"
+    }
+  },
+  {
+    "number": 9,
+    "question": {
+      "id": "q-9-planets",
+      "number": 9,
+      "domain": "science",
+      "text": "Сколько планет было в Солнечной системе до 2006 года?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Плутон"
+    },
+    "hint1": {
+      "id": "h1-9-symphony",
+      "number": 9,
+      "domain": "music",
+      "text": "Какой номер последней завершённой симфонии Бетховена?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Симфония_№_9_(Бетховен)"
+    },
+    "hint2": {
+      "id": "h2-9-lives",
+      "number": 9,
+      "domain": "other",
+      "text": "Сколько жизней, по поверью, у кошки?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Кошка"
+    }
+  },
+  {
+    "number": 60,
+    "question": {
+      "id": "q-60-minutes",
+      "number": 60,
+      "domain": "science",
+      "text": "Сколько минут в часе?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Час"
+    },
+    "hint1": {
+      "id": "h1-60-base",
+      "number": 60,
+      "domain": "history",
+      "text": "Какая система счисления использовалась в Древнем Вавилоне?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Шестидесятеричная_система_счисления"
+    },
+    "hint2": {
+      "id": "h2-60-carbon",
+      "number": 60,
+      "domain": "science",
+      "text": "Сколько атомов углерода в молекуле фуллерена C60?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Фуллерен"
+    }
+  },
+  {
+    "number": 100,
+    "question": {
+      "id": "q-100-celsius",
+      "number": 100,
+      "domain": "science",
+      "text": "При какой температуре по Цельсию кипит вода при нормальном давлении?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Кипение"
+    },
+    "hint1": {
+      "id": "h1-100-percent",
+      "number": 100,
+      "domain": "other",
+      "text": "Сколько процентов составляет целое?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Процент"
+    },
+    "hint2": {
+      "id": "h2-100-senate",
+      "number": 100,
+      "domain": "history",
+      "text": "Сколько сенаторов в Сенате США?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Сенат_США"
+    }
+  },
+  {
+    "number": 32,
+    "question": {
+      "id": "q-32-teeth",
+      "number": 32,
+      "domain": "science",
+      "text": "Сколько зубов у взрослого человека?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Зубы_человека"
+    },
+    "hint1": {
+      "id": "h1-32-freezing",
+      "number": 32,
+      "domain": "science",
+      "text": "При какой температуре по Фаренгейту замерзает вода?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Фаренгейт"
+    },
+    "hint2": {
+      "id": "h2-32-chess",
+      "number": 32,
+      "domain": "sports",
+      "text": "Сколько фигур в начале шахматной партии?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Шахматы"
+    }
+  },
+  {
+    "number": 144,
+    "question": {
+      "id": "q-144-gross",
+      "number": 144,
+      "domain": "other",
+      "text": "Сколько единиц в гроссе?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Гросс"
+    },
+    "hint1": {
+      "id": "h1-144-fibonacci",
+      "number": 144,
+      "domain": "science",
+      "text": "Какое двенадцатое число Фибоначчи?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Числа_Фибоначчи"
+    },
+    "hint2": {
+      "id": "h2-144-square",
+      "number": 144,
+      "domain": "science",
+      "text": "Чему равен квадрат числа 12?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Квадрат_(алгебра)"
+    }
+  },
+  {
+    "number": 40,
+    "question": {
+      "id": "q-40-days",
+      "number": 40,
+      "domain": "other",
+      "text": "Сколько дней длится Великий пост в христианстве?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Великий_пост"
+    },
+    "hint1": {
+      "id": "h1-40-winks",
+      "number": 40,
+      "domain": "other",
+      "text": "Сколько 'подмигиваний' в английском выражении 'forty winks' (короткий сон)?",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Power_nap"
+    },
+    "hint2": {
+      "id": "h2-40-ali",
+      "number": 40,
+      "domain": "pop_culture",
+      "text": "Сколько разбойников в сказке про Али-Бабу?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Али-Баба_и_сорок_разбойников"
+    }
+  },
+  {
+    "number": 220,
+    "question": {
+      "id": "q-220-voltage",
+      "number": 220,
+      "domain": "science",
+      "text": "Какое стандартное напряжение в электросети большинства стран Европы?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Сетевое_напряжение"
+    },
+    "hint1": {
+      "id": "h1-220-yards",
+      "number": 220,
+      "domain": "sports",
+      "text": "Сколько ярдов в фарлонге?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Фарлонг"
+    },
+    "hint2": {
+      "id": "h2-220-amicable",
+      "number": 220,
+      "domain": "science",
+      "text": "Какое наименьшее из пары дружественных чисел (220 и 284)?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Дружественные_числа"
+    }
+  },
+  {
+    "number": 300,
+    "question": {
+      "id": "q-300-spartans",
+      "number": 300,
+      "domain": "history",
+      "text": "Сколько спартанцев сражалось при Фермопилах?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Битва_при_Фермопилах"
+    },
+    "hint1": {
+      "id": "h1-300-bowling",
+      "number": 300,
+      "domain": "sports",
+      "text": "Какой максимальный счёт в боулинге?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Боулинг"
+    },
+    "hint2": {
+      "id": "h2-300-movie",
+      "number": 300,
+      "domain": "movies",
+      "text": "Какое число в названии фильма Зака Снайдера 2006 года?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/300_спартанцев_(фильм,_2006)"
+    }
+  },
+  {
+    "number": 8,
+    "question": {
+      "id": "q-8-bits",
+      "number": 8,
+      "domain": "science",
+      "text": "Сколько бит в байте?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Байт"
+    },
+    "hint1": {
+      "id": "h1-8-pool",
+      "number": 8,
+      "domain": "sports",
+      "text": "Какой номер чёрного шара в американском пуле?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Пул_(бильярд)"
+    },
+    "hint2": {
+      "id": "h2-8-legs",
+      "number": 8,
+      "domain": "science",
+      "text": "Сколько ног у паука?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Пауки"
+    }
+  },
+  {
+    "number": 27,
+    "question": {
+      "id": "q-27-cube",
+      "number": 27,
+      "domain": "science",
+      "text": "Чему равен куб числа 3?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Куб_(алгебра)"
+    },
+    "hint1": {
+      "id": "h1-27-club",
+      "number": 27,
+      "domain": "pop_culture",
+      "text": "В каком возрасте умерли музыканты 'Клуба 27'?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Клуб_27"
+    },
+    "hint2": {
+      "id": "h2-27-books",
+      "number": 27,
+      "domain": "other",
+      "text": "Сколько книг в Новом Завете?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Новый_Завет"
+    }
+  },
+  {
+    "number": 78,
+    "question": {
+      "id": "q-78-tarot",
+      "number": 78,
+      "domain": "other",
+      "text": "Сколько карт в колоде Таро?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Таро"
+    },
+    "hint1": {
+      "id": "h1-78-platinum",
+      "number": 78,
+      "domain": "science",
+      "text": "Какой атомный номер платины?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Платина"
+    },
+    "hint2": {
+      "id": "h2-78-rpm",
+      "number": 78,
+      "domain": "music",
+      "text": "С какой скоростью вращались старые граммофонные пластинки (об/мин)?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Грампластинка"
+    }
+  },
+  {
+    "number": 11,
+    "question": {
+      "id": "q-11-football",
+      "number": 11,
+      "domain": "sports",
+      "text": "Сколько игроков в футбольной команде на поле?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Футбол"
+    },
+    "hint1": {
+      "id": "h1-11-apollo",
+      "number": 11,
+      "domain": "history",
+      "text": "Какой номер миссии Аполлон первой высадился на Луну?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Аполлон-11"
+    },
+    "hint2": {
+      "id": "h2-11-spinal",
+      "number": 11,
+      "domain": "movies",
+      "text": "До какого значения доходит громкость в фильме 'Это Spinal Tap'?",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Up_to_eleven"
+    }
+  },
+  {
+    "number": 360,
+    "question": {
+      "id": "q-360-degrees",
+      "number": 360,
+      "domain": "science",
+      "text": "Сколько градусов в полном круге?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Градус_(геометрия)"
+    },
+    "hint1": {
+      "id": "h1-360-skateboard",
+      "number": 360,
+      "domain": "sports",
+      "text": "На сколько градусов поворачивается скейтборд при выполнении трюка '360'?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Скейтбординг"
+    },
+    "hint2": {
+      "id": "h2-360-console",
+      "number": 360,
+      "domain": "pop_culture",
+      "text": "Какое число в названии игровой консоли Xbox второго поколения?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Xbox_360"
+    }
+  },
+  {
+    "number": 500,
+    "question": {
+      "id": "q-500-sheets",
+      "number": 500,
+      "domain": "other",
+      "text": "Сколько листов бумаги в стандартной пачке?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Бумага"
+    },
+    "hint1": {
+      "id": "h1-500-indy",
+      "number": 500,
+      "domain": "sports",
+      "text": "Сколько миль в гонке Индианаполис-500?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/500_миль_Индианаполиса"
+    },
+    "hint2": {
+      "id": "h2-500-fortune",
+      "number": 500,
+      "domain": "other",
+      "text": "Сколько крупнейших компаний США входит в рейтинг Fortune?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Fortune_500"
+    }
+  },
+  {
+    "number": 777,
+    "question": {
+      "id": "q-777-boeing",
+      "number": 777,
+      "domain": "pop_culture",
+      "text": "Какая модель самолёта Boeing обозначается тремя семёрками?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Boeing_777"
+    },
+    "hint1": {
+      "id": "h1-777-jackpot",
+      "number": 777,
+      "domain": "sports",
+      "text": "Какая комбинация считается джекпотом в игровых автоматах?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Игровой_автомат"
+    },
+    "hint2": {
+      "id": "h2-777-luck",
+      "number": 777,
+      "domain": "other",
+      "text": "Какое трёхзначное число считается счастливым во многих культурах?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Счастливое_число"
+    }
+  },
+  {
+    "number": 15,
+    "question": {
+      "id": "q-15-rugby",
+      "number": 15,
+      "domain": "sports",
+      "text": "Сколько игроков в команде по регби?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Регби"
+    },
+    "hint1": {
+      "id": "h1-15-puzzle",
+      "number": 15,
+      "domain": "other",
+      "text": "Сколько фишек с цифрами в классической игре 'Пятнашки'?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Игра_в_15"
+    },
+    "hint2": {
+      "id": "h2-15-tennis",
+      "number": 15,
+      "domain": "sports",
+      "text": "Сколько очков даёт первый выигранный мяч в теннисе?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Теннис"
+    }
+  },
+  {
+    "number": 404,
+    "question": {
+      "id": "q-404-error",
+      "number": 404,
+      "domain": "science",
+      "text": "Какой код ошибки HTTP означает 'Не найдено'?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/HTTP_404"
+    },
+    "hint1": {
+      "id": "h1-404-area",
+      "number": 404,
+      "domain": "geography",
+      "text": "Какой телефонный код Атланты, штат Джорджия?",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Area_code_404"
+    },
+    "hint2": {
+      "id": "h2-404-highway",
+      "number": 404,
+      "domain": "geography",
+      "text": "Какой номер автомагистрали в районе Торонто?",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Ontario_Highway_404"
+    }
+  },
+  {
+    "number": 69,
+    "question": {
+      "id": "q-69-moon",
+      "number": 69,
+      "domain": "history",
+      "text": "В каком году человек впервые высадился на Луну (19__)?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Высадка_на_Луну"
+    },
+    "hint1": {
+      "id": "h1-69-zodiac",
+      "number": 69,
+      "domain": "other",
+      "text": "Какой символ зодиака Рак напоминает перевёрнутую цифру?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Рак_(знак_зодиака)"
+    },
+    "hint2": {
+      "id": "h2-69-element",
+      "number": 69,
+      "domain": "science",
+      "text": "Какой атомный номер тулия?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Тулий"
+    }
+  },
+  {
+    "number": 256,
+    "question": {
+      "id": "q-256-byte",
+      "number": 256,
+      "domain": "science",
+      "text": "Сколько различных значений может принимать один байт?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Байт"
+    },
+    "hint1": {
+      "id": "h1-256-power",
+      "number": 256,
+      "domain": "science",
+      "text": "Чему равно 2 в восьмой степени?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Степень_(алгебра)"
+    },
+    "hint2": {
+      "id": "h2-256-colors",
+      "number": 256,
+      "domain": "science",
+      "text": "Сколько цветов в стандартной VGA палитре?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/VGA"
+    }
+  },
+  {
+    "number": 4,
+    "question": {
+      "id": "q-4-seasons",
+      "number": 4,
+      "domain": "science",
+      "text": "Сколько времён года?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Времена_года"
+    },
+    "hint1": {
+      "id": "h1-4-elements",
+      "number": 4,
+      "domain": "history",
+      "text": "Сколько стихий в древнегреческой философии?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Классические_элементы"
+    },
+    "hint2": {
+      "id": "h2-4-beatles",
+      "number": 4,
+      "domain": "music",
+      "text": "Сколько участников было в группе The Beatles?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/The_Beatles"
+    }
+  },
+  {
+    "number": 99,
+    "question": {
+      "id": "q-99-luftballons",
+      "number": 99,
+      "domain": "music",
+      "text": "Сколько воздушных шаров в песне Nena?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/99_Luftballons"
+    },
+    "hint1": {
+      "id": "h1-99-ice",
+      "number": 99,
+      "domain": "sports",
+      "text": "Какой номер носил Уэйн Гретцки?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Гретцки,_Уэйн"
+    },
+    "hint2": {
+      "id": "h2-99-percent",
+      "number": 99,
+      "domain": "science",
+      "text": "Сколько процентов микробов убивает антисептик согласно рекламе?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Антисептик"
+    }
+  },
+  {
+    "number": 10,
+    "question": {
+      "id": "q-10-decimal",
+      "number": 10,
+      "domain": "science",
+      "text": "Какое основание десятичной системы счисления?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Десятичная_система_счисления"
+    },
+    "hint1": {
+      "id": "h1-10-commandments",
+      "number": 10,
+      "domain": "other",
+      "text": "Сколько заповедей получил Моисей?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Десять_заповедей"
+    },
+    "hint2": {
+      "id": "h2-10-downing",
+      "number": 10,
+      "domain": "history",
+      "text": "Какой номер резиденции премьер-министра Великобритании на Даунинг-стрит?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Даунинг-стрит,_10"
+    }
+  },
+  {
+    "number": 420,
+    "question": {
+      "id": "q-420-cannabis",
+      "number": 420,
+      "domain": "pop_culture",
+      "text": "Какое число стало символом культуры употребления марихуаны?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/420_(культура_конопли)"
+    },
+    "hint1": {
+      "id": "h1-420-seconds",
+      "number": 420,
+      "domain": "science",
+      "text": "Сколько секунд в 7 минутах?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Минута"
+    },
+    "hint2": {
+      "id": "h2-420-area",
+      "number": 420,
+      "domain": "geography",
+      "text": "Какой код города Пльзень в Чехии?",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Telephone_numbers_in_the_Czech_Republic"
+    }
+  },
+  {
+    "number": 31,
+    "question": {
+      "id": "q-31-days",
+      "number": 31,
+      "domain": "science",
+      "text": "Сколько дней в январе?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Январь"
+    },
+    "hint1": {
+      "id": "h1-31-ice-cream",
+      "number": 31,
+      "domain": "pop_culture",
+      "text": "Сколько вкусов в названии Baskin-Robbins?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Baskin-Robbins"
+    },
+    "hint2": {
+      "id": "h2-31-gallium",
+      "number": 31,
+      "domain": "science",
+      "text": "Какой атомный номер галлия?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Галлий"
+    }
+  },
+  {
+    "number": 747,
+    "question": {
+      "id": "q-747-boeing",
+      "number": 747,
+      "domain": "pop_culture",
+      "text": "Какая модель Boeing называется 'Джамбо джет'?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Boeing_747"
+    },
+    "hint1": {
+      "id": "h1-747-area",
+      "number": 747,
+      "domain": "geography",
+      "text": "Какой телефонный код округа Ориндж, Калифорния?",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Area_codes_657_and_714"
+    },
+    "hint2": {
+      "id": "h2-747-meters",
+      "number": 747,
+      "domain": "geography",
+      "text": "Какая высота водопада Анхель в метрах (основной поток)?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Анхель_(водопад)"
+    }
+  },
+  {
+    "number": 23,
+    "question": {
+      "id": "q-23-chromosomes",
+      "number": 23,
+      "domain": "science",
+      "text": "Сколько пар хромосом у человека?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Кариотип_человека"
+    },
+    "hint1": {
+      "id": "h1-23-jordan",
+      "number": 23,
+      "domain": "sports",
+      "text": "Какой номер носил Майкл Джордан в Чикаго Буллз?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Джордан,_Майкл"
+    },
+    "hint2": {
+      "id": "h2-23-enigma",
+      "number": 23,
+      "domain": "pop_culture",
+      "text": "Какое число является предметом одержимости в фильме 'Роковое число 23'?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Роковое_число_23"
+    }
+  },
+  {
+    "number": 17,
+    "question": {
+      "id": "q-17-haiku",
+      "number": 17,
+      "domain": "other",
+      "text": "Сколько слогов в хайку?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Хайку"
+    },
+    "hint1": {
+      "id": "h1-17-chlorine",
+      "number": 17,
+      "domain": "science",
+      "text": "Какой атомный номер хлора?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Хлор"
+    },
+    "hint2": {
+      "id": "h2-17-magazine",
+      "number": 17,
+      "domain": "pop_culture",
+      "text": "Какое число в названии американского подросткового журнала?",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Seventeen_(American_magazine)"
+    }
+  },
+  {
+    "number": 18,
+    "question": {
+      "id": "q-18-holes",
+      "number": 18,
+      "domain": "sports",
+      "text": "Сколько лунок на стандартном поле для гольфа?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Гольф"
+    },
+    "hint1": {
+      "id": "h1-18-age",
+      "number": 18,
+      "domain": "other",
+      "text": "С какого возраста наступает совершеннолетие в большинстве стран?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Совершеннолетие"
+    },
+    "hint2": {
+      "id": "h2-18-argon",
+      "number": 18,
+      "domain": "science",
+      "text": "Какой атомный номер аргона?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Аргон"
+    }
+  },
+  {
+    "number": 19,
+    "question": {
+      "id": "q-19-covid",
+      "number": 19,
+      "domain": "science",
+      "text": "Какое число в названии коронавируса COVID-__?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/COVID-19"
+    },
+    "hint1": {
+      "id": "h1-19-amendment",
+      "number": 19,
+      "domain": "history",
+      "text": "Какая поправка к Конституции США дала женщинам право голоса?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Девятнадцатая_поправка_к_Конституции_США"
+    },
+    "hint2": {
+      "id": "h2-19-potassium",
+      "number": 19,
+      "domain": "science",
+      "text": "Какой атомный номер калия?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Калий"
+    }
+  },
+  {
+    "number": 911,
+    "question": {
+      "id": "q-911-emergency",
+      "number": 911,
+      "domain": "other",
+      "text": "Какой номер экстренной службы в США?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/911_(служба_экстренной_помощи)"
+    },
+    "hint1": {
+      "id": "h1-911-porsche",
+      "number": 911,
+      "domain": "pop_culture",
+      "text": "Какая модель спортивного автомобиля Porsche?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Porsche_911"
+    },
+    "hint2": {
+      "id": "h2-911-september",
+      "number": 911,
+      "domain": "history",
+      "text": "Какая дата теракта в США записывается как 9/11?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Террористические_акты_11_сентября_2001_года"
+    }
+  },
+  {
+    "number": 1000,
+    "question": {
+      "id": "q-1000-kilo",
+      "number": 1000,
+      "domain": "science",
+      "text": "Сколько граммов в килограмме?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Килограмм"
+    },
+    "hint1": {
+      "id": "h1-1000-millennium",
+      "number": 1000,
+      "domain": "science",
+      "text": "Сколько лет в тысячелетии?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Тысячелетие"
+    },
+    "hint2": {
+      "id": "h2-1000-paper",
+      "number": 1000,
+      "domain": "pop_culture",
+      "text": "Сколько бумажных журавликов сложила Садако Сасаки?",
+      "sourceUrl": "https://ru.wikipedia.org/wiki/Сасаки,_Садако"
+    }
+  }
+]
