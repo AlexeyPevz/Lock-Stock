@@ -201,28 +201,31 @@ async function backgroundGenerationTick() {
       question: {
         id: `gen-q-${Date.now()}`,
         number: gen.answer,
-        domain: "other" as const,
-        text: gen.question,
+        domain: gen.question.domain,
+        text: gen.question.text,
+        sourceUrl: gen.question.source_url,
       },
       hint1: {
         id: `gen-h1-${Date.now()}`,
         number: gen.answer,
-        domain: "other" as const,
-        text: gen.hint1,
+        domain: gen.hint1.domain,
+        text: gen.hint1.text,
+        sourceUrl: gen.hint1.source_url,
       },
       hint2: {
         id: `gen-h2-${Date.now()}`,
         number: gen.answer,
-        domain: "other" as const,
-        text: gen.hint2,
+        domain: gen.hint2.domain,
+        text: gen.hint2.text,
+        sourceUrl: gen.hint2.source_url,
       },
     };
 
     const roundId = ensureFactsAndRound(db, bundle);
 
-    const q = await verifyWithWikipedia(bundle.question.text);
-    const h1 = await verifyWithWikipedia(bundle.hint1.text);
-    const h2 = await verifyWithWikipedia(bundle.hint2.text);
+    const q = await verifyWithWikipedia(bundle.question.text, bundle.question.sourceUrl);
+    const h1 = await verifyWithWikipedia(bundle.hint1.text, bundle.hint1.sourceUrl);
+    const h2 = await verifyWithWikipedia(bundle.hint2.text, bundle.hint2.sourceUrl);
 
     if (q.ok && h1.ok && h2.ok) {
       const roundRepo = new SqliteRoundRepository(db);

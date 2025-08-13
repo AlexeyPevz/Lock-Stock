@@ -40,6 +40,10 @@ const bannedPatterns = [
   /сколько[\s-]*дат/i,
   /номер серии/i,
   /номер эпизода/i,
+  /сколько[\s-]*серий/i,
+  /сколько[\s-]*сезонов/i,
+  /какой[\s-]*номер/i,
+  /по\s+счёт[уе]/i,
 ];
 
 export function validateNoBannedPatterns(text: string): boolean {

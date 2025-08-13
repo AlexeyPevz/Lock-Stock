@@ -119,20 +119,29 @@ export class SqliteRoundRepository implements RoundRepository {
   }
 
   markAsSeen(userId: number, roundId: string, number: number): void {
-    const stmt = this.db.prepare(`
+    const insertSeen = this.db.prepare(`
       INSERT OR IGNORE INTO user_seen (user_id, number, round_id, fact_id)
       VALUES (?, ?, ?, ?)
     `);
-    
+
     const round = this.findById(roundId);
     if (!round) return;
 
+    const bumpUsage = this.db.prepare(`
+      UPDATE facts_by_number 
+      SET usage_count = usage_count + 1, last_used_at = datetime('now') 
+      WHERE id = ?
+    `);
+
     const transaction = this.db.transaction(() => {
-      stmt.run(userId, number, roundId, round.question.id);
-      stmt.run(userId, number, roundId, round.hint1.id);
-      stmt.run(userId, number, roundId, round.hint2.id);
+      insertSeen.run(userId, number, roundId, round.question.id);
+      insertSeen.run(userId, number, roundId, round.hint1.id);
+      insertSeen.run(userId, number, roundId, round.hint2.id);
+      bumpUsage.run(round.question.id);
+      bumpUsage.run(round.hint1.id);
+      bumpUsage.run(round.hint2.id);
     });
-    
+
     transaction();
   }
 
@@ -148,7 +157,7 @@ export class SqliteRoundRepository implements RoundRepository {
       ORDER BY seen_at DESC 
       LIMIT ?
     `).all(userId, limit) as { number: number }[];
-    
+
     return rows.map(r => r.number);
   }
 }
@@ -164,7 +173,7 @@ export class SqliteFeedbackRepository implements FeedbackRepository {
         WHERE user_id = ? AND round_id = ?
       `).run(rating, userId, roundId);
     }
-    
+
     if (category) {
       this.db.prepare(`
         UPDATE user_seen 
@@ -182,7 +191,7 @@ export class SqliteFeedbackRepository implements FeedbackRepository {
       FROM user_seen 
       WHERE round_id = ? AND rating IS NOT NULL
     `).get(roundId) as { avg_rating: number | null };
-    
+
     return result.avg_rating;
   }
 
@@ -193,12 +202,12 @@ export class SqliteFeedbackRepository implements FeedbackRepository {
       WHERE round_id = ? AND feedback_category IS NOT NULL 
       GROUP BY feedback_category
     `).all(roundId) as { feedback_category: string; count: number }[];
-    
+
     const stats: Record<string, number> = {};
     for (const row of rows) {
       stats[row.feedback_category] = row.count;
     }
-    
+
     return stats;
   }
 }
