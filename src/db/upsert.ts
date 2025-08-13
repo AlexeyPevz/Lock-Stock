@@ -25,11 +25,13 @@ export function ensureFactsAndRound(db: DB, round: RoundBundle): string {
   const h1Id = insertOrUpdateFact(db, round.hint1);
   const h2Id = insertOrUpdateFact(db, round.hint2);
   const roundId = `r-${qId}-${h1Id}-${h2Id}`;
+  const sourcesArr = [round.question.sourceUrl, round.hint1.sourceUrl, round.hint2.sourceUrl].filter(Boolean);
+  const sources = sourcesArr.length ? JSON.stringify(sourcesArr) : null;
   const stmt = db.prepare(
-    `INSERT INTO rounds (id, number, question_fact_id, hint1_fact_id, hint2_fact_id, verified)
-     VALUES (?, ?, ?, ?, ?, 0)
+    `INSERT INTO rounds (id, number, question_fact_id, hint1_fact_id, hint2_fact_id, sources, verified)
+     VALUES (?, ?, ?, ?, ?, ?, 0)
      ON CONFLICT(id) DO NOTHING`
   );
-  stmt.run(roundId, round.number, qId, h1Id, h2Id);
+  stmt.run(roundId, round.number, qId, h1Id, h2Id, sources);
   return roundId;
 }

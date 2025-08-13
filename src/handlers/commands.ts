@@ -115,7 +115,15 @@ export async function handleNewGame(ctx: Context, deps: CommandHandlerDeps): Pro
       freeLimit: deps.freeRounds,
       premiumTotal: deps.premiumRounds,
       isPremium: false,
+      skipsUsed: 0,
     };
+
+    // Ensure DB ids for feedback/seen tracking
+    session.roundIds = {};
+    for (let i = 0; i < session.rounds.length; i++) {
+      const roundId = ensureFactsAndRound(deps.db, session.rounds[i]);
+      session.roundIds[i] = roundId;
+    }
 
     deps.sessions.set(chatId, session);
 
@@ -132,8 +140,8 @@ export async function handleNewGame(ctx: Context, deps: CommandHandlerDeps): Pro
         },
       }
     );
-      } catch (error: any) {
-      logger.error("Error creating new game", { ...logger.fromContext(ctx), error });
+  } catch (error: any) {
+    logger.error("Error creating new game", { ...logger.fromContext(ctx), error });
     await ctx.reply("Произошла ошибка при создании игры. Попробуйте позже.");
   }
 }
@@ -157,25 +165,25 @@ export async function handleGenerate(ctx: Context, deps: CommandHandlerDeps): Pr
       const gen = await generateOneRound();
       const bundle = {
         number: gen.answer,
-        question: { id: `gen-q-${Date.now()}-${i}`, number: gen.answer, domain: "other" as const, text: gen.question },
-        hint1: { id: `gen-h1-${Date.now()}-${i}`, number: gen.answer, domain: "other" as const, text: gen.hint1 },
-        hint2: { id: `gen-h2-${Date.now()}-${i}`, number: gen.answer, domain: "other" as const, text: gen.hint2 },
-      };
+        question: { id: `gen-q-${Date.now()}-${i}`, number: gen.answer, domain: gen.question.domain, text: gen.question.text, sourceUrl: gen.question.source_url },
+        hint1: { id: `gen-h1-${Date.now()}-${i}`, number: gen.answer, domain: gen.hint1.domain, text: gen.hint1.text, sourceUrl: gen.hint1.source_url },
+        hint2: { id: `gen-h2-${Date.now()}-${i}`, number: gen.answer, domain: gen.hint2.domain, text: gen.hint2.text, sourceUrl: gen.hint2.source_url },
+      } as const;
 
       const roundId = ensureFactsAndRound(deps.db, bundle);
       generated++;
 
-      // Verify
-      const q = await verifyWithWikipedia(bundle.question.text);
-      const h1 = await verifyWithWikipedia(bundle.hint1.text);
-      const h2 = await verifyWithWikipedia(bundle.hint2.text);
+      // Verify using provided sources when available
+      const q = await verifyWithWikipedia(bundle.question.text, bundle.question.sourceUrl);
+      const h1 = await verifyWithWikipedia(bundle.hint1.text, bundle.hint1.sourceUrl);
+      const h2 = await verifyWithWikipedia(bundle.hint2.text, bundle.hint2.sourceUrl);
 
       if (q.ok && h1.ok && h2.ok) {
         deps.db.prepare("UPDATE rounds SET verified = 1 WHERE id = ?").run(roundId);
         verified++;
       }
-          } catch (error: any) {
-        logger.error("Error generating round", { ...logger.fromContext(ctx), error, iteration: i });
+    } catch (error: any) {
+      logger.error("Error generating round", { ...logger.fromContext(ctx), error, iteration: i });
     }
   }
 

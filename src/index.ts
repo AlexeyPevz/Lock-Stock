@@ -30,6 +30,7 @@ import { verifyWithWikipedia } from "./verification/wiki";
 import { generateOneRound } from "./generation/generator";
 import { ensureFactsAndRound } from "./db/upsert";
 import { SqliteRoundRepository } from "./db/repository";
+import { handlePremiumInfo, handlePremiumBuy, handlePreCheckout, handleSuccessfulPayment, PaymentsDeps } from "./handlers/payments";
 
 dotenv.config();
 
@@ -57,13 +58,14 @@ const ADMIN_IDS = new Set(
     .filter(Boolean)
     .map((s) => Number(s))
 );
-const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || 5);
-const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || 15);
+const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || 20);
+const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || 30);
 const CONTENT_PACK_PATH = process.env.CONTENT_PACK_PATH || "./content/pack.default.json";
 const ADMIN_LOG_CHAT_ID = Number(process.env.ADMIN_LOG_CHAT_ID || 0);
 const ENABLE_BG_GEN = process.env.ENABLE_BG_GEN === "1";
 const BG_GEN_INTERVAL_SEC = Number(process.env.BG_GEN_INTERVAL_SEC || 600);
 const HEALTH_CHECK_INTERVAL = Number(process.env.HEALTH_CHECK_INTERVAL || 300);
+const PREMIUM_PRICE_STARS = Number(process.env.PREMIUM_PRICE_STARS || 100);
 
 // Initialize dependencies
 const sessions = new Map<number, GameSession>();
@@ -108,10 +110,18 @@ const callbackDeps: CallbackHandlerDeps = {
   bot,
 };
 
+const paymentsDeps: PaymentsDeps = {
+  sessions,
+  bot,
+  premiumPriceStars: PREMIUM_PRICE_STARS,
+  premiumTotalRounds: DEFAULT_PREMIUM,
+};
+
 // Command handlers
 bot.command("start", (ctx) => handleStart(ctx));
 bot.command("rules", (ctx) => handleRules(ctx));
-bot.command("premium", (ctx) => handlePremium(ctx));
+// Replace /premium to show dynamic info and purchase
+bot.command("premium", (ctx) => handlePremiumInfo(ctx, paymentsDeps));
 bot.command("help", (ctx) => handleHelp(ctx));
 bot.command("newgame", (ctx) => handleNewGame(ctx, commandDeps));
 bot.command("gen", (ctx) => handleGenerate(ctx, commandDeps));
@@ -164,6 +174,12 @@ bot.callbackQuery("round:next", (ctx) => handleRoundNext(ctx, callbackDeps));
 bot.callbackQuery("round:skip", (ctx) => handleRoundSkip(ctx, callbackDeps));
 bot.callbackQuery(/timer:(30|60|90)/, (ctx) => handleTimer(ctx, callbackDeps));
 bot.callbackQuery("show:rules", (ctx) => handleShowRules(ctx));
+// Premium callbacks
+bot.callbackQuery("premium:buy", (ctx) => handlePremiumBuy(ctx, paymentsDeps));
+
+// Payments events (Stars)
+bot.on("pre_checkout_query", (ctx) => handlePreCheckout(ctx));
+bot.on("message:successful_payment", (ctx) => handleSuccessfulPayment(ctx, paymentsDeps));
 
 // Admin logging helper
 async function adminLog(text: string) {
@@ -171,8 +187,8 @@ async function adminLog(text: string) {
     if (ADMIN_LOG_CHAT_ID) {
       await bot.api.sendMessage(ADMIN_LOG_CHAT_ID, text);
     }
-      } catch (error: any) {
-      logger.error("Failed to send admin log", { error, text });
+  } catch (error: any) {
+    logger.error("Failed to send admin log", { error, text });
   }
 }
 
@@ -185,28 +201,31 @@ async function backgroundGenerationTick() {
       question: {
         id: `gen-q-${Date.now()}`,
         number: gen.answer,
-        domain: "other" as const,
-        text: gen.question,
+        domain: gen.question.domain,
+        text: gen.question.text,
+        sourceUrl: gen.question.source_url,
       },
       hint1: {
         id: `gen-h1-${Date.now()}`,
         number: gen.answer,
-        domain: "other" as const,
-        text: gen.hint1,
+        domain: gen.hint1.domain,
+        text: gen.hint1.text,
+        sourceUrl: gen.hint1.source_url,
       },
       hint2: {
         id: `gen-h2-${Date.now()}`,
         number: gen.answer,
-        domain: "other" as const,
-        text: gen.hint2,
+        domain: gen.hint2.domain,
+        text: gen.hint2.text,
+        sourceUrl: gen.hint2.source_url,
       },
     };
 
     const roundId = ensureFactsAndRound(db, bundle);
 
-    const q = await verifyWithWikipedia(bundle.question.text);
-    const h1 = await verifyWithWikipedia(bundle.hint1.text);
-    const h2 = await verifyWithWikipedia(bundle.hint2.text);
+    const q = await verifyWithWikipedia(bundle.question.text, bundle.question.sourceUrl);
+    const h1 = await verifyWithWikipedia(bundle.hint1.text, bundle.hint1.sourceUrl);
+    const h2 = await verifyWithWikipedia(bundle.hint2.text, bundle.hint2.sourceUrl);
 
     if (q.ok && h1.ok && h2.ok) {
       const roundRepo = new SqliteRoundRepository(db);
@@ -251,8 +270,8 @@ async function shutdown(signal: string) {
 
     logger.info("Shutdown complete");
     process.exit(0);
-      } catch (error: any) {
-      logger.error("Error during shutdown", { error });
+  } catch (error: any) {
+    logger.error("Error during shutdown", { error });
     process.exit(1);
   }
 }
