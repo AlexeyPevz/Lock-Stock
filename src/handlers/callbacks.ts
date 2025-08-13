@@ -95,7 +95,7 @@ export async function handleReveal(ctx: Context, deps: CallbackHandlerDeps): Pro
   if (what === "answer") state.showAnswer = true;
 
   const round = session.rounds[index];
-  const canSkip = session.currentIndex < 2; // Allow 2 skips per session
+  const canSkip = session.skipsUsed < 2; // Allow 2 skips per session
   
   const replyMarkup = state.showAnswer && session.roundIds?.[index]
     ? buildFeedbackKeyboard(session.roundIds[index], round.number)
@@ -184,8 +184,8 @@ export async function handleRoundNext(ctx: Context, deps: CallbackHandlerDeps): 
 
       session.rounds.push(nextRound);
       
-      // Mark as seen
-      const roundId = `dynamic-${Date.now()}`;
+      // Mark as seen (use actual round id from DB)
+      const roundId = nextRound.id;
       session.roundIds = session.roundIds || {};
       session.roundIds[session.currentIndex] = roundId;
       roundRepo.markAsSeen(userId, roundId, nextRound.number);
@@ -201,9 +201,9 @@ export async function handleRoundNext(ctx: Context, deps: CallbackHandlerDeps): 
     session.revealed[session.currentIndex] = state;
 
     const text = renderRoundText(round, state);
-    const keyboard = buildHostKeyboard(state, session.currentIndex < 2);
+      const keyboard = buildHostKeyboard(state, session.skipsUsed < 2);
 
-    await ctx.editMessageText(text, { reply_markup: keyboard });
+  await ctx.editMessageText(text, { reply_markup: keyboard });
     await ctx.answerCallbackQuery();
 
     logger.info("Round started", {
@@ -260,6 +260,7 @@ export async function handleRoundSkip(ctx: Context, deps: CallbackHandlerDeps): 
     ]],
   };
 
+  session.skipsUsed += 1;
   await ctx.reply("Раунд пропущен.", { reply_markup: nextButton });
 }
 

@@ -115,7 +115,15 @@ export async function handleNewGame(ctx: Context, deps: CommandHandlerDeps): Pro
       freeLimit: deps.freeRounds,
       premiumTotal: deps.premiumRounds,
       isPremium: false,
+      skipsUsed: 0,
     };
+
+    // Ensure DB ids for feedback/seen tracking
+    session.roundIds = {};
+    for (let i = 0; i < session.rounds.length; i++) {
+      const roundId = ensureFactsAndRound(deps.db, session.rounds[i]);
+      session.roundIds[i] = roundId;
+    }
 
     deps.sessions.set(chatId, session);
 
@@ -132,8 +140,8 @@ export async function handleNewGame(ctx: Context, deps: CommandHandlerDeps): Pro
         },
       }
     );
-      } catch (error: any) {
-      logger.error("Error creating new game", { ...logger.fromContext(ctx), error });
+  } catch (error: any) {
+    logger.error("Error creating new game", { ...logger.fromContext(ctx), error });
     await ctx.reply("Произошла ошибка при создании игры. Попробуйте позже.");
   }
 }
@@ -174,8 +182,8 @@ export async function handleGenerate(ctx: Context, deps: CommandHandlerDeps): Pr
         deps.db.prepare("UPDATE rounds SET verified = 1 WHERE id = ?").run(roundId);
         verified++;
       }
-          } catch (error: any) {
-        logger.error("Error generating round", { ...logger.fromContext(ctx), error, iteration: i });
+    } catch (error: any) {
+      logger.error("Error generating round", { ...logger.fromContext(ctx), error, iteration: i });
     }
   }
 

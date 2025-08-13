@@ -39,4 +39,5 @@ export interface Session {
   freeLimit: number; // free rounds available
   premiumTotal: number; // total rounds when premium
   isPremium: boolean;
+  skipsUsed: number; // number of skips used in this session
 }
