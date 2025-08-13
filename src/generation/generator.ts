@@ -34,8 +34,18 @@ function getClient() {
   return new OpenAI({ apiKey, baseURL, defaultHeaders });
 }
 
+function buildModelCandidates(primary?: string): string[] {
+  const candidates: string[] = [];
+  const configured = primary || process.env.OPENAI_MODEL || "deepseek/deepseek-chat";
+  candidates.push(configured);
+  // Fallback to a free route if different
+  if (!candidates.includes("meta-llama/llama-3.1-8b-instruct:free")) {
+    candidates.push("meta-llama/llama-3.1-8b-instruct:free");
+  }
+  return candidates;
+}
+
 function validateGenerated(gen: GeneratedRound): void {
-  // domain distinct
   if (!validateDomainsDistinct({
     number: gen.answer,
     question: { id: "gq", number: gen.answer, domain: gen.question.domain, text: gen.question.text, sourceUrl: gen.question.source_url },
@@ -44,42 +54,45 @@ function validateGenerated(gen: GeneratedRound): void {
   } as any)) {
     throw new Error("Domains are not distinct");
   }
-  // banned patterns
   if (!validateNoBannedPatterns(gen.question.text) || !validateNoBannedPatterns(gen.hint1.text) || !validateNoBannedPatterns(gen.hint2.text)) {
     throw new Error("Banned pattern detected");
   }
 }
 
 export async function generateOneRound(options: GeneratorOptions = {}): Promise<GeneratedRound> {
-  const model = options.model || process.env.OPENAI_MODEL || "meta-llama/llama-3.1-8b-instruct:free";
   const temperature = options.temperature ?? 0.7;
   const maxAttempts = options.maxAttempts ?? 3;
   const client = getClient();
 
+  const models = buildModelCandidates(options.model);
   let lastError: any = null;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const completion = await client.chat.completions.create({
-        model,
-        temperature,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: LOCK_STOCK_SYSTEM_PROMPT },
-          { role: "user", content: "Сгенерируй один валидный раунд сейчас. Верни только JSON." },
-        ],
-      });
 
-      const content = completion.choices[0]?.message?.content || "";
-      const parsed = JSON.parse(content);
-      const check = GeneratedSchema.safeParse(parsed);
-      if (!check.success) throw new Error("Invalid JSON: " + check.error.message);
+  for (const model of models) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const completion = await client.chat.completions.create({
+          model,
+          temperature,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: LOCK_STOCK_SYSTEM_PROMPT },
+            { role: "user", content: "Сгенерируй один валидный раунд сейчас. Верни только JSON." },
+          ],
+        });
 
-      validateGenerated(check.data);
-      return check.data;
-    } catch (e: any) {
-      lastError = e;
-      if (attempt === maxAttempts) break;
+        const content = completion.choices[0]?.message?.content || "";
+        const parsed = JSON.parse(content);
+        const check = GeneratedSchema.safeParse(parsed);
+        if (!check.success) throw new Error("Invalid JSON: " + check.error.message);
+
+        validateGenerated(check.data);
+        return check.data;
+      } catch (e: any) {
+        lastError = e;
+        // try next attempt or next model
+      }
     }
   }
+
   throw new Error("Generation failed: " + (lastError?.message || "unknown error"));
 }
