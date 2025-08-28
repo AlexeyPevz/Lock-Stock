@@ -62,6 +62,17 @@ function validateGenerated(gen: GeneratedRound): void {
 
 export async function generateOneRound(options: GeneratorOptions = {}): Promise<GeneratedRound> {
   const config = ConfigManager.getInstance();
+  
+  // Проверяем, включен ли режим SGR
+  const useSGR = config.get("useSGR") ?? true;
+  
+  if (useSGR) {
+    // Используем новый SGR генератор
+    const { generateOneRoundSGR } = await import("./sgr-generator");
+    return generateOneRoundSGR(options);
+  }
+  
+  // Старый генератор для обратной совместимости
   const modelConfig = config.getModelConfig();
   
   const temperature = options.temperature ?? modelConfig.temperature;

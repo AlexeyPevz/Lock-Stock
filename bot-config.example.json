@@ -1,8 +1,10 @@
 {
-  "openRouterModel": "deepseek/deepseek-chat",
+  "openRouterModel": "mistralai/mistral-7b-instruct:free",
   "systemPrompt": null,
-  "temperature": 0.7,
+  "temperature": 0.8,
   "maxAttempts": 3,
+  "useSGR": true,
+  "useExamples": true,
   "freeRounds": 5,
   "premiumRounds": 50,
   "verificationEnabled": true,

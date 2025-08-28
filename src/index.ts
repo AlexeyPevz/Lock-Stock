@@ -70,6 +70,14 @@ import {
   handleAdminLimitSession,
   handleAdminLimitSkip,
   handleAdminLimitDaily,
+  handleAdminStatsAI,
+  handleAdminStatsFinance,
+  handleAdminStatsGames,
+  handleAdminStatsCharts,
+  handleAdminChart,
+  handleAdminModelSGR,
+  handleAdminToggleSGR,
+  handleAdminToggleExamples,
   AdminHandlerDeps,
 } from "./handlers/admin";
 import { ConfigManager } from "./config/manager";
@@ -115,6 +123,10 @@ const PREMIUM_PRICE_STARS = Number(process.env.PREMIUM_PRICE_STARS || 100);
 // Initialize dependencies
 const sessions = new Map<number, GameSession>();
 const db = openDb();
+
+// Initialize stats collector
+import { initStatsCollector } from "./stats/collector";
+const statsCollector = initStatsCollector(db);
 
 // Session middleware
 interface BotSessionData {}
@@ -265,6 +277,9 @@ bot.callbackQuery("admin_stats", (ctx) => handleAdminStats(ctx, adminDeps));
 bot.callbackQuery("admin_close", (ctx) => handleAdminClose(ctx));
 bot.callbackQuery("admin_model_temp", (ctx) => handleAdminModelTemp(ctx, adminDeps));
 bot.callbackQuery("admin_model_attempts", (ctx) => handleAdminModelAttempts(ctx, adminDeps));
+bot.callbackQuery("admin_model_sgr", (ctx) => handleAdminModelSGR(ctx, adminDeps));
+bot.callbackQuery("admin_toggle_sgr", (ctx) => handleAdminToggleSGR(ctx, adminDeps));
+bot.callbackQuery("admin_toggle_examples", (ctx) => handleAdminToggleExamples(ctx, adminDeps));
 
 // Admin callbacks with data
 bot.callbackQuery(/^admin_set_model:(.+)$/, (ctx) => {
@@ -325,6 +340,18 @@ bot.callbackQuery(/^admin_pkg_toggle:(.+)$/, (ctx) => {
 bot.callbackQuery(/^admin_pkg_delete:(.+)$/, (ctx) => {
   const packageId = ctx.match[1];
   return handleAdminPackageDelete(ctx, adminDeps, packageId);
+});
+
+// Statistics callbacks
+bot.callbackQuery("admin_stats_ai", (ctx) => handleAdminStatsAI(ctx, adminDeps));
+bot.callbackQuery("admin_stats_finance", (ctx) => handleAdminStatsFinance(ctx, adminDeps));
+bot.callbackQuery("admin_stats_games", (ctx) => handleAdminStatsGames(ctx, adminDeps));
+bot.callbackQuery("admin_stats_charts", (ctx) => handleAdminStatsCharts(ctx, adminDeps));
+
+bot.callbackQuery(/^admin_chart:(.+):(\d+)$/, (ctx) => {
+  const metric = ctx.match[1];
+  const days = ctx.match[2];
+  return handleAdminChart(ctx, adminDeps, metric, days);
 });
 
 // Payments events (Stars)

@@ -54,6 +54,7 @@ export async function handleAdminModel(ctx: Context & SessionFlavor<Session>, de
     .text("🌡️ Температура", "admin_model_temp")
     .row()
     .text("🔄 Попытки генерации", "admin_model_attempts")
+    .text("🧬 SGR режим", "admin_model_sgr")
     .row()
     .text("⬅️ Назад", "admin_menu");
 
@@ -74,6 +75,7 @@ export async function handleAdminModelChange(ctx: Context & SessionFlavor<Sessio
   if (!isAdmin(ctx, deps)) return;
 
   const models = [
+    { name: "🆓 Mistral 7B (Free)", id: "mistralai/mistral-7b-instruct:free" },
     { name: "DeepSeek Chat", id: "deepseek/deepseek-chat" },
     { name: "Claude 3 Haiku", id: "anthropic/claude-3-haiku" },
     { name: "GPT-4 Turbo", id: "openai/gpt-4-turbo-preview" },
@@ -193,22 +195,76 @@ export async function handleAdminGame(ctx: Context & SessionFlavor<Session>, dep
 export async function handleAdminStats(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
   if (!isAdmin(ctx, deps)) return;
 
-  // TODO: Добавить реальную статистику из БД
-  const keyboard = new InlineKeyboard()
-    .text("⬅️ Назад", "admin_menu");
+  try {
+    const { getStatsCollector } = await import("../stats/collector");
+    const { generationStats } = await import("../generation/sgr-generator");
+    
+    const collector = getStatsCollector();
+    const stats = await collector.getStats();
+    const genStats = generationStats.getStats();
 
-  await ctx.editMessageText(
-    `*📊 Статистика бота*\n\n` +
-    `👥 Пользователей: -\n` +
-    `🎮 Всего игр: -\n` +
-    `❓ Сгенерировано вопросов: -\n` +
-    `💎 Премиум пользователей: -\n\n` +
-    `_Статистика будет доступна после интеграции с БД_`,
-    { 
+    const keyboard = new InlineKeyboard()
+      .text("📈 Графики", "admin_stats_charts")
+      .text("🤖 AI метрики", "admin_stats_ai")
+      .row()
+      .text("💰 Финансы", "admin_stats_finance")
+      .text("🎮 Игровая активность", "admin_stats_games")
+      .row()
+      .text("🔄 Обновить", "admin_stats")
+      .text("⬅️ Назад", "admin_menu");
+
+    const statsText = [
+      `*📊 Общая статистика*`,
+      ``,
+      `*👥 Пользователи*`,
+      `├ Всего: ${stats.totalUsers}`,
+      `├ Активных сегодня: ${stats.activeUsersToday}`,
+      `├ Активных за неделю: ${stats.activeUsersWeek}`,
+      `├ Новых сегодня: ${stats.newUsersToday}`,
+      `└ Премиум: ${stats.premiumUsers}`,
+      ``,
+      `*🎮 Игры и раунды*`,
+      `├ Всего игр: ${stats.totalGames}`,
+      `├ Всего раундов: ${stats.totalRounds}`,
+      `├ Раундов сегодня: ${stats.roundsToday}`,
+      `├ Раундов за неделю: ${stats.roundsWeek}`,
+      `└ Среднее раундов/игру: ${stats.avgRoundsPerGame}`,
+      ``,
+      `*🤖 Генерация (БД)*`,
+      `├ Всего генераций: ${stats.totalGenerations}`,
+      `├ Сегодня: ${stats.generationsToday}`,
+      `├ Успешность: ${stats.generationSuccessRate}`,
+      `└ Среднее время: ${stats.avgGenerationTime}мс`,
+      ``,
+      `*🤖 Генерация (Сессия)*`,
+      `├ Всего: ${genStats.total}`,
+      `├ Успешных: ${genStats.successful}`,
+      `└ Успешность: ${genStats.successRate}`,
+      ``,
+      `*⏱️ Система*`,
+      `└ Аптайм: ${stats.uptimeHours}ч`
+    ].join('\n');
+
+    await ctx.editMessageText(statsText, { 
       parse_mode: "Markdown",
       reply_markup: keyboard 
-    }
-  );
+    });
+  } catch (error) {
+    logger.error("Failed to get stats", { error });
+    
+    const keyboard = new InlineKeyboard()
+      .text("⬅️ Назад", "admin_menu");
+      
+    await ctx.editMessageText(
+      `*📊 Статистика бота*\n\n` +
+      `❌ Ошибка при получении статистики\n\n` +
+      `_Убедитесь, что коллектор статистики инициализирован_`,
+      { 
+        parse_mode: "Markdown",
+        reply_markup: keyboard 
+      }
+    );
+  }
 }
 
 // Обработка текстовых сообщений в админ-режиме
@@ -938,4 +994,285 @@ export async function handleAdminLimitDaily(ctx: Context & SessionFlavor<Session
     "Отправьте число или /cancel для отмены",
     { parse_mode: "Markdown" }
   );
+}
+
+// Детальная статистика AI
+export async function handleAdminStatsAI(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const { generationStats } = await import("../generation/sgr-generator");
+    const genStats = generationStats.getStats();
+    
+    const keyboard = new InlineKeyboard()
+      .text("⬅️ Назад", "admin_stats");
+
+    let statsText = `*🤖 Детальная статистика AI*\n\n`;
+    
+    // Статистика по моделям
+    statsText += `*Статистика по моделям:*\n`;
+    for (const [model, data] of Object.entries(genStats.byModel)) {
+      const modelData = data as any;
+      statsText += `\n*${model}*\n`;
+      statsText += `├ Всего запросов: ${modelData.total}\n`;
+      statsText += `├ Успешных: ${modelData.success}\n`;
+      statsText += `├ Успешность: ${modelData.successRate}\n`;
+      statsText += `├ Среднее время: ${Math.round(modelData.avgDuration)}мс\n`;
+      statsText += `└ Средние попытки: ${modelData.avgAttempts.toFixed(1)}\n`;
+    }
+    
+    // Последние ошибки
+    if (genStats.recentErrors.length > 0) {
+      statsText += `\n*Последние ошибки:*\n`;
+      genStats.recentErrors.slice(0, 5).forEach((err: any) => {
+        statsText += `• ${err.model}: ${err.error}\n`;
+      });
+    }
+
+    await ctx.editMessageText(statsText, { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    });
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при загрузке статистики");
+  }
+}
+
+// Финансовая статистика
+export async function handleAdminStatsFinance(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const { getStatsCollector } = await import("../stats/collector");
+    const collector = getStatsCollector();
+    const stats = await collector.getStats();
+    
+    const keyboard = new InlineKeyboard()
+      .text("⬅️ Назад", "admin_stats");
+
+    let statsText = `*💰 Финансовая статистика*\n\n`;
+    
+    statsText += `*Общие показатели:*\n`;
+    statsText += `├ Общий доход: ${stats.totalRevenue} ⭐\n`;
+    statsText += `├ Доход сегодня: ${stats.revenueToday} ⭐\n`;
+    statsText += `└ Премиум пользователей: ${stats.premiumUsers}\n\n`;
+    
+    statsText += `*Продажи по пакетам:*\n`;
+    const config = ConfigManager.getInstance();
+    const packages = config.getPackages();
+    
+    for (const pkg of packages) {
+      const sold = stats.packagesSold[pkg.id] || 0;
+      const revenue = sold * pkg.priceStars;
+      statsText += `\n*${pkg.name}*\n`;
+      statsText += `├ Продано: ${sold}\n`;
+      statsText += `├ Цена: ${pkg.priceStars} ⭐\n`;
+      statsText += `└ Доход: ${revenue} ⭐\n`;
+    }
+
+    await ctx.editMessageText(statsText, { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    });
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при загрузке статистики");
+  }
+}
+
+// Игровая активность
+export async function handleAdminStatsGames(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const { getStatsCollector } = await import("../stats/collector");
+    const collector = getStatsCollector();
+    const stats = await collector.getStats();
+    
+    const keyboard = new InlineKeyboard()
+      .text("⬅️ Назад", "admin_stats");
+
+    let statsText = `*🎮 Игровая активность*\n\n`;
+    
+    statsText += `*Общие показатели:*\n`;
+    statsText += `├ Всего игр: ${stats.totalGames}\n`;
+    statsText += `├ Всего раундов: ${stats.totalRounds}\n`;
+    statsText += `├ Среднее раундов/игру: ${stats.avgRoundsPerGame}\n`;
+    statsText += `├ Пропусков использовано: ${stats.skipUsage}\n`;
+    statsText += `└ Средний рейтинг: ${stats.avgRating.toFixed(1)} (${stats.totalRatings} оценок)\n\n`;
+    
+    statsText += `*Активность:*\n`;
+    statsText += `├ Раундов сегодня: ${stats.roundsToday}\n`;
+    statsText += `├ Раундов за неделю: ${stats.roundsWeek}\n`;
+    statsText += `└ Активных пользователей: ${stats.activeUsersWeek}\n\n`;
+    
+    statsText += `*Популярные команды:*\n`;
+    const sortedCommands = Object.entries(stats.commandUsage)
+      .sort(([,a], [,b]) => (b as number) - (a as number))
+      .slice(0, 5);
+    
+    for (const [cmd, count] of sortedCommands) {
+      statsText += `├ /${cmd}: ${count}\n`;
+    }
+
+    await ctx.editMessageText(statsText, { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    });
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при загрузке статистики");
+  }
+}
+
+// Графики статистики
+export async function handleAdminStatsCharts(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  const keyboard = new InlineKeyboard()
+    .text("📊 Пользователи (7д)", "admin_chart:users:7")
+    .text("📊 Пользователи (30д)", "admin_chart:users:30")
+    .row()
+    .text("🎮 Раунды (7д)", "admin_chart:rounds:7")
+    .text("🎮 Раунды (30д)", "admin_chart:rounds:30")
+    .row()
+    .text("🤖 Генерации (7д)", "admin_chart:generations:7")
+    .text("💰 Доход (7д)", "admin_chart:revenue:7")
+    .row()
+    .text("⬅️ Назад", "admin_stats");
+
+  await ctx.editMessageText(
+    `*📈 Графики и аналитика*\n\n` +
+    `Выберите метрику и период для отображения:\n\n` +
+    `_Данные будут показаны в текстовом формате_`,
+    { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    }
+  );
+}
+
+// Отображение графика
+export async function handleAdminChart(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps, metric: string, days: string) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const { getStatsCollector } = await import("../stats/collector");
+    const collector = getStatsCollector();
+    const chartData = await collector.getChartData(metric, parseInt(days));
+    
+    const keyboard = new InlineKeyboard()
+      .text("⬅️ Назад", "admin_stats_charts");
+
+    let chartText = `*📊 График: ${getMetricName(metric)} (${days} дней)*\n\n`;
+    
+    if (chartData.length === 0) {
+      chartText += "_Нет данных за выбранный период_";
+    } else {
+      // Находим максимальное значение для масштабирования
+      const maxValue = Math.max(...chartData.map((d: any) => d.value || 0));
+      const scale = maxValue > 0 ? 20 / maxValue : 1;
+      
+      // Отображаем данные
+      for (const row of chartData) {
+        const date = new Date(row.date).toLocaleDateString('ru-RU', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        const value = row.value || 0;
+        const barLength = Math.round(value * scale);
+        const bar = '█'.repeat(Math.max(1, barLength));
+        
+        chartText += `${date}: ${bar} ${value}\n`;
+      }
+      
+      // Добавляем итоги
+      const total = chartData.reduce((sum: number, d: any) => sum + (d.value || 0), 0);
+      const avg = chartData.length > 0 ? (total / chartData.length).toFixed(1) : 0;
+      
+      chartText += `\n*Итого:* ${total}\n`;
+      chartText += `*Среднее:* ${avg}`;
+    }
+
+    await ctx.editMessageText(chartText, { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    });
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при загрузке данных");
+  }
+}
+
+function getMetricName(metric: string): string {
+  const names: Record<string, string> = {
+    users: "Активные пользователи",
+    rounds: "Раунды",
+    generations: "Генерации",
+    revenue: "Доход (⭐)"
+  };
+  return names[metric] || metric;
+}
+
+// Настройки SGR
+export async function handleAdminModelSGR(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  const config = ConfigManager.getInstance();
+  const useSGR = config.get("useSGR");
+  const useExamples = config.get("useExamples");
+
+  const keyboard = new InlineKeyboard()
+    .text(useSGR ? "🔴 Выключить SGR" : "🟢 Включить SGR", "admin_toggle_sgr")
+    .row()
+    .text(useExamples ? "📚 Примеры: ВКЛ" : "📚 Примеры: ВЫКЛ", "admin_toggle_examples")
+    .row()
+    .text("⬅️ Назад", "admin_model");
+
+  await ctx.editMessageText(
+    `*🧬 Настройки SGR (Structured Generation)*\n\n` +
+    `SGR - это продвинутая схема генерации с:\n` +
+    `• Структурированными промптами\n` +
+    `• Строгой валидацией\n` +
+    `• Few-shot примерами\n` +
+    `• Оптимизацией для Mistral\n\n` +
+    `Статус SGR: ${useSGR ? "✅ Включен" : "❌ Выключен"}\n` +
+    `Использовать примеры: ${useExamples ? "✅ Да" : "❌ Нет"}\n\n` +
+    `_Рекомендуется для бесплатной модели Mistral 7B_`,
+    { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    }
+  );
+}
+
+export async function handleAdminToggleSGR(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const config = ConfigManager.getInstance();
+    const newValue = !config.get("useSGR");
+    config.set("useSGR", newValue);
+    
+    await ctx.answerCallbackQuery(
+      newValue ? "✅ SGR режим включен" : "❌ SGR режим выключен"
+    );
+    await handleAdminModelSGR(ctx, deps);
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при изменении настройки");
+  }
+}
+
+export async function handleAdminToggleExamples(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const config = ConfigManager.getInstance();
+    const newValue = !config.get("useExamples");
+    config.set("useExamples", newValue);
+    
+    await ctx.answerCallbackQuery(
+      newValue ? "✅ Примеры включены" : "❌ Примеры выключены"
+    );
+    await handleAdminModelSGR(ctx, deps);
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при изменении настройки");
+  }
 }

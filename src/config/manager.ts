@@ -15,10 +15,12 @@ export const GamePackageSchema = z.object({
 // Схема конфигурации бота
 export const BotConfigSchema = z.object({
   // AI настройки
-  openRouterModel: z.string().default("deepseek/deepseek-chat"),
+  openRouterModel: z.string().default("mistralai/mistral-7b-instruct:free"),
   systemPrompt: z.string().optional(),
-  temperature: z.number().min(0).max(2).default(0.7),
+  temperature: z.number().min(0).max(2).default(0.8),
   maxAttempts: z.number().min(1).max(10).default(3),
+  useSGR: z.boolean().default(true),
+  useExamples: z.boolean().default(true),
   
   // Игровые настройки
   freeRounds: z.number().min(1).default(5),
