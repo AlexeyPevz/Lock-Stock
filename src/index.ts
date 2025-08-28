@@ -1,5 +1,7 @@
 import { Bot, Context, session, SessionFlavor } from "grammy";
 import { FileAdapter } from "@grammyjs/storage-file";
+import { RedisAdapter } from "@grammyjs/storage-redis";
+import { createClient as createRedisClient } from "redis";
 import dotenv from "dotenv";
 import { z } from "zod";
 import { Session } from "./types";
@@ -86,6 +88,17 @@ import { unifiedSession } from "./middleware/unified-session";
 
 dotenv.config();
 
+// Initialize Sentry if configured
+import * as Sentry from "@sentry/node";
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.0),
+    environment: process.env.NODE_ENV || "development",
+  });
+  logger.info("Sentry initialized");
+}
+
 // Environment validation
 const EnvSchema = z.object({
   BOT_TOKEN: z.string().min(1, "BOT_TOKEN is required"),
@@ -136,7 +149,20 @@ type MyContext = Context & SessionFlavor<Session>;
 // Initialize bot
 const bot = new Bot<MyContext>(BOT_TOKEN);
 
-// Session middleware
+// Session middleware with Redis optional storage
+let storage: any = new FileAdapter<Session>({ dirName: "data/sessions" });
+if (process.env.SESSIONS_REDIS_URL) {
+  try {
+    const redis = createRedisClient({ url: process.env.SESSIONS_REDIS_URL });
+    // connect in background; grammy adapter handles commands
+    redis.connect().catch(() => {});
+    storage = new RedisAdapter<Session>({ instance: redis });
+    logger.info("Using Redis session storage");
+  } catch (e: any) {
+    logger.warn("Failed to init Redis storage, falling back to file", { error: e?.message });
+  }
+}
+
 bot.use(session({
   initial: (): Session => ({
     chatId: 0,
@@ -148,7 +174,7 @@ bot.use(session({
     isPremium: false,
     skipsUsed: 0,
   }),
-  storage: new FileAdapter<Session>({ dirName: "data/sessions" }),
+  storage,
 }));
 
 // Bridge legacy Map-based sessions with Grammy sessions (one-time migration, then kept in sync)
