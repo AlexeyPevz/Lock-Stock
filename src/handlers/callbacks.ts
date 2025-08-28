@@ -3,7 +3,6 @@ import { Session, RevealState, RoundBundle } from "../types";
 import { logger } from "../utils/logger";
 import { renderRoundText } from "../utils/render";
 import { SqliteRoundRepository, SqliteFeedbackRepository } from "../db/repository";
-import { safeCallbackData } from "../utils/telegram-limits";
 import { NoContentError } from "../utils/errors";
 import Database from "better-sqlite3";
 
@@ -33,29 +32,29 @@ function buildHostKeyboard(state: RevealState, canSkip: boolean) {
   };
 }
 
-function buildFeedbackKeyboard(roundId: string, number: number) {
+function buildFeedbackKeyboard(roundIndex: number, number: number) {
   return {
     inline_keyboard: [
       [
-        { text: "★1", callback_data: safeCallbackData("fb:rate", roundId, number, 1) },
-        { text: "★2", callback_data: safeCallbackData("fb:rate", roundId, number, 2) },
-        { text: "★3", callback_data: safeCallbackData("fb:rate", roundId, number, 3) },
+        { text: "★1", callback_data: `fb:rate:${roundIndex}:${number}:1` },
+        { text: "★2", callback_data: `fb:rate:${roundIndex}:${number}:2` },
+        { text: "★3", callback_data: `fb:rate:${roundIndex}:${number}:3` },
       ],
       [
-        { text: "★4", callback_data: safeCallbackData("fb:rate", roundId, number, 4) },
-        { text: "★5", callback_data: safeCallbackData("fb:rate", roundId, number, 5) },
+        { text: "★4", callback_data: `fb:rate:${roundIndex}:${number}:4` },
+        { text: "★5", callback_data: `fb:rate:${roundIndex}:${number}:5` },
       ],
       [
-        { text: "Сложно", callback_data: safeCallbackData("fb:cat", roundId, number, "hard") },
-        { text: "Легко", callback_data: safeCallbackData("fb:cat", roundId, number, "easy") },
+        { text: "Сложно", callback_data: `fb:cat:${roundIndex}:${number}:hard` },
+        { text: "Легко", callback_data: `fb:cat:${roundIndex}:${number}:easy` },
       ],
       [
-        { text: "Спорно", callback_data: safeCallbackData("fb:cat", roundId, number, "controversial") },
-        { text: "Узкая тема", callback_data: safeCallbackData("fb:cat", roundId, number, "niche") },
+        { text: "Спорно", callback_data: `fb:cat:${roundIndex}:${number}:controversial` },
+        { text: "Узкая тема", callback_data: `fb:cat:${roundIndex}:${number}:niche` },
       ],
       [
-        { text: "Формулировка", callback_data: safeCallbackData("fb:cat", roundId, number, "wording") },
-        { text: "Устарело", callback_data: safeCallbackData("fb:cat", roundId, number, "outdated") },
+        { text: "Формулировка", callback_data: `fb:cat:${roundIndex}:${number}:wording` },
+        { text: "Устарело", callback_data: `fb:cat:${roundIndex}:${number}:outdated` },
       ],
     ],
   };
@@ -99,7 +98,7 @@ export async function handleReveal(ctx: Context, deps: CallbackHandlerDeps): Pro
   const canSkip = session.skipsUsed < 2; // Allow 2 skips per session
   
   const replyMarkup = state.showAnswer && session.roundIds?.[index]
-    ? buildFeedbackKeyboard(session.roundIds[index], round.number)
+    ? buildFeedbackKeyboard(index, round.number)
     : buildHostKeyboard(state, canSkip);
 
   try {
@@ -120,14 +119,21 @@ export async function handleFeedback(ctx: Context, deps: CallbackHandlerDeps): P
     return;
   }
 
-  const match = (ctx.callbackQuery?.data || "").match(/fb:(rate|cat):([^:]+):(\d+):([^:]+)/);
+  const match = (ctx.callbackQuery?.data || "").match(/fb:(rate|cat):(\d+):(\d+):([^:]+)/);
   if (!match) {
     await ctx.answerCallbackQuery();
     return;
   }
 
-  const [, kind, roundId, numberStr, value] = match;
+  const [, kind, indexStr, numberStr, value] = match;
   const number = Number(numberStr);
+  const roundIndex = Number(indexStr);
+
+  const chatId = ctx.chat?.id;
+  if (!chatId) { await ctx.answerCallbackQuery(); return; }
+  const session = deps.sessions.get(chatId);
+  const roundId = session?.roundIds?.[roundIndex];
+  if (!roundId) { await ctx.answerCallbackQuery({ text: "Сессия устарела" }); return; }
 
   const feedbackRepo = new SqliteFeedbackRepository(deps.db);
 
