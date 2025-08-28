@@ -40,4 +40,5 @@ export interface Session {
   premiumTotal: number; // total rounds when premium
   isPremium: boolean;
   skipsUsed: number; // number of skips used in this session
+  adminMode?: "editing_prompt" | "setting_temperature" | "setting_free_rounds" | "setting_premium_rounds"; // Admin input mode
 }

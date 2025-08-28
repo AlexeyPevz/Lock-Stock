@@ -31,6 +31,24 @@ import { generateOneRound } from "./generation/generator";
 import { ensureFactsAndRound } from "./db/upsert";
 import { SqliteRoundRepository } from "./db/repository";
 import { handlePremiumInfo, handlePremiumBuy, handlePreCheckout, handleSuccessfulPayment, PaymentsDeps } from "./handlers/payments";
+import {
+  handleAdminMenu,
+  handleAdminModel,
+  handleAdminModelChange,
+  handleAdminSetModel,
+  handleAdminPrompt,
+  handleAdminPromptEdit,
+  handleAdminGame,
+  handleAdminStats,
+  handleAdminTextInput,
+  handleAdminClose,
+  handleAdminPromptReset,
+  handleAdminPromptShow,
+  handleAdminModelTemp,
+  handleAdminModelAttempts,
+  handleAdminSetAttempts,
+  AdminHandlerDeps,
+} from "./handlers/admin";
 
 dotenv.config();
 
@@ -128,6 +146,10 @@ bot.command("gen", (ctx) => handleGenerate(ctx, commandDeps));
 bot.command("quality", (ctx) => handleQuality(ctx, commandDeps));
 bot.command("recalc", (ctx) => handleRecalc(ctx, commandDeps));
 
+// Admin command
+const adminDeps: AdminHandlerDeps = { adminIds: ADMIN_IDS };
+bot.command("admin", (ctx) => handleAdminMenu(ctx, adminDeps));
+
 // Admin-only verify command
 bot.command("verify", async (ctx) => {
   const userId = ctx.from?.id;
@@ -167,6 +189,12 @@ bot.command("verify", async (ctx) => {
   }
 });
 
+// Admin text input handler (must be before other handlers)
+bot.on("message:text", async (ctx, next) => {
+  const handled = await handleAdminTextInput(ctx, adminDeps);
+  if (!handled) await next();
+});
+
 // Callback query handlers
 bot.callbackQuery(/reveal:(question|hint1|hint2|answer)/, (ctx) => handleReveal(ctx, callbackDeps));
 bot.callbackQuery(/fb:(rate|cat):(.+?):(\d+):(\w+)/, (ctx) => handleFeedback(ctx, callbackDeps));
@@ -176,6 +204,31 @@ bot.callbackQuery(/timer:(30|60|90)/, (ctx) => handleTimer(ctx, callbackDeps));
 bot.callbackQuery("show:rules", (ctx) => handleShowRules(ctx));
 // Premium callbacks
 bot.callbackQuery("premium:buy", (ctx) => handlePremiumBuy(ctx, paymentsDeps));
+
+// Admin callbacks
+bot.callbackQuery("admin_menu", (ctx) => handleAdminMenu(ctx, adminDeps));
+bot.callbackQuery("admin_model", (ctx) => handleAdminModel(ctx, adminDeps));
+bot.callbackQuery("admin_model_change", (ctx) => handleAdminModelChange(ctx, adminDeps));
+bot.callbackQuery("admin_prompt", (ctx) => handleAdminPrompt(ctx, adminDeps));
+bot.callbackQuery("admin_prompt_edit", (ctx) => handleAdminPromptEdit(ctx, adminDeps));
+bot.callbackQuery("admin_prompt_reset", (ctx) => handleAdminPromptReset(ctx, adminDeps));
+bot.callbackQuery("admin_prompt_show", (ctx) => handleAdminPromptShow(ctx, adminDeps));
+bot.callbackQuery("admin_game", (ctx) => handleAdminGame(ctx, adminDeps));
+bot.callbackQuery("admin_stats", (ctx) => handleAdminStats(ctx, adminDeps));
+bot.callbackQuery("admin_close", (ctx) => handleAdminClose(ctx));
+bot.callbackQuery("admin_model_temp", (ctx) => handleAdminModelTemp(ctx, adminDeps));
+bot.callbackQuery("admin_model_attempts", (ctx) => handleAdminModelAttempts(ctx, adminDeps));
+
+// Admin callbacks with data
+bot.callbackQuery(/^admin_set_model:(.+)$/, (ctx) => {
+  const modelId = ctx.match[1];
+  return handleAdminSetModel(ctx, adminDeps, modelId);
+});
+
+bot.callbackQuery(/^admin_set_attempts:(\d+)$/, (ctx) => {
+  const attempts = parseInt(ctx.match[1]);
+  return handleAdminSetAttempts(ctx, adminDeps, attempts);
+});
 
 // Payments events (Stars)
 bot.on("pre_checkout_query", (ctx) => handlePreCheckout(ctx));
