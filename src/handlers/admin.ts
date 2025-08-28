@@ -167,6 +167,10 @@ export async function handleAdminGame(ctx: Context & SessionFlavor<Session>, dep
     .text("🎁 Бесплатные раунды", "admin_game_free")
     .text("💎 Премиум раунды", "admin_game_premium")
     .row()
+    .text("📦 Пакеты и цены", "admin_packages")
+    .text("⏱️ Таймеры", "admin_timers")
+    .row()
+    .text("🚫 Лимиты", "admin_limits")
     .text("✅ Верификация", "admin_game_verify")
     .row()
     .text("⬅️ Назад", "admin_menu");
@@ -175,6 +179,8 @@ export async function handleAdminGame(ctx: Context & SessionFlavor<Session>, dep
     `*Игровые настройки*\n\n` +
     `🎁 Бесплатных раундов: ${config.get("freeRounds")}\n` +
     `💎 Премиум раундов: ${config.get("premiumRounds")}\n` +
+    `⏱️ Таймер по умолчанию: ${config.get("defaultTimerSeconds")}с\n` +
+    `🚫 Лимит пропусков: ${config.get("skipLimit")}\n` +
     `✅ Верификация: ${config.get("verificationEnabled") ? "Включена" : "Выключена"}`,
     { 
       parse_mode: "Markdown",
@@ -218,14 +224,16 @@ export async function handleAdminTextInput(
   // Отмена
   if (text === "/cancel") {
     ctx.session.adminMode = undefined;
+    ctx.session.adminData = undefined;
     await ctx.reply("❌ Действие отменено");
     return true;
   }
 
+  const config = ConfigManager.getInstance();
+
   switch (mode) {
     case "editing_prompt":
       try {
-        const config = ConfigManager.getInstance();
         config.set("systemPrompt", text);
         ctx.session.adminMode = undefined;
         
@@ -248,7 +256,6 @@ export async function handleAdminTextInput(
           return true;
         }
 
-        const config = ConfigManager.getInstance();
         config.set("temperature", temp);
         ctx.session.adminMode = undefined;
         
@@ -268,7 +275,6 @@ export async function handleAdminTextInput(
           return true;
         }
 
-        const config = ConfigManager.getInstance();
         const key = mode === "setting_free_rounds" ? "freeRounds" : "premiumRounds";
         config.set(key, rounds);
         ctx.session.adminMode = undefined;
@@ -277,6 +283,113 @@ export async function handleAdminTextInput(
         return true;
       } catch (error) {
         await ctx.reply("❌ Ошибка при установке количества раундов");
+        return true;
+      }
+
+    case "setting_package_name":
+    case "setting_package_rounds":
+    case "setting_package_price":
+      try {
+        const packageId = ctx.session.adminData as string;
+        if (!packageId) {
+          await ctx.reply("❌ Ошибка: ID пакета не найден");
+          return true;
+        }
+
+        let updates: any = {};
+        
+        if (mode === "setting_package_name") {
+          updates.name = text;
+        } else if (mode === "setting_package_rounds") {
+          const rounds = parseInt(text);
+          if (isNaN(rounds) || rounds < 1) {
+            await ctx.reply("❌ Количество должно быть положительным числом");
+            return true;
+          }
+          updates.rounds = rounds;
+        } else {
+          const price = parseInt(text);
+          if (isNaN(price) || price < 1) {
+            await ctx.reply("❌ Цена должна быть положительным числом");
+            return true;
+          }
+          updates.priceStars = price;
+        }
+
+        config.updatePackage(packageId, updates);
+        ctx.session.adminMode = undefined;
+        ctx.session.adminData = undefined;
+        
+        await ctx.reply("✅ Пакет успешно обновлен!");
+        return true;
+      } catch (error) {
+        await ctx.reply("❌ Ошибка при обновлении пакета");
+        return true;
+      }
+
+    case "setting_timer":
+      try {
+        const seconds = parseInt(text);
+        const key = ctx.session.adminData as string;
+        
+        if (isNaN(seconds) || seconds < 10) {
+          await ctx.reply("❌ Время должно быть не менее 10 секунд");
+          return true;
+        }
+
+        config.set(key as any, seconds);
+        ctx.session.adminMode = undefined;
+        ctx.session.adminData = undefined;
+        
+        await ctx.reply(`✅ Таймер установлен: ${seconds} сек`);
+        return true;
+      } catch (error) {
+        await ctx.reply("❌ Ошибка при установке таймера");
+        return true;
+      }
+
+    case "setting_limit":
+      try {
+        const limit = parseInt(text);
+        const key = ctx.session.adminData as string;
+        
+        if (isNaN(limit) || limit < 0) {
+          await ctx.reply("❌ Лимит должен быть неотрицательным числом");
+          return true;
+        }
+
+        config.set(key as any, limit);
+        ctx.session.adminMode = undefined;
+        ctx.session.adminData = undefined;
+        
+        await ctx.reply(`✅ Лимит установлен: ${limit}`);
+        return true;
+      } catch (error) {
+        await ctx.reply("❌ Ошибка при установке лимита");
+        return true;
+      }
+
+    case "editing_welcome":
+      try {
+        config.set("welcomeMessage", text);
+        ctx.session.adminMode = undefined;
+        
+        await ctx.reply("✅ Приветственное сообщение обновлено!");
+        return true;
+      } catch (error) {
+        await ctx.reply("❌ Ошибка при сохранении сообщения");
+        return true;
+      }
+
+    case "editing_maintenance":
+      try {
+        config.set("maintenanceMessage", text);
+        ctx.session.adminMode = undefined;
+        
+        await ctx.reply("✅ Сообщение об обслуживании обновлено!");
+        return true;
+      } catch (error) {
+        await ctx.reply("❌ Ошибка при сохранении сообщения");
         return true;
       }
   }
@@ -384,4 +497,445 @@ export async function handleAdminSetAttempts(ctx: Context & SessionFlavor<Sessio
   } catch (error) {
     await ctx.answerCallbackQuery("❌ Ошибка при установке попыток");
   }
+}
+
+// Обработчики для настройки бесплатных/премиум раундов
+export async function handleAdminGameFree(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_free_rounds";
+  
+  await ctx.editMessageText(
+    "*Настройка бесплатных раундов*\n\n" +
+    "Введите количество бесплатных раундов для новых пользователей.\n\n" +
+    "_Текущее значение: " + ConfigManager.getInstance().get("freeRounds") + "_\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+export async function handleAdminGamePremium(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_premium_rounds";
+  
+  await ctx.editMessageText(
+    "*Настройка премиум раундов*\n\n" +
+    "Введите количество раундов для премиум пользователей.\n\n" +
+    "_Текущее значение: " + ConfigManager.getInstance().get("premiumRounds") + "_\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+// Переключатель верификации
+export async function handleAdminGameVerify(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const config = ConfigManager.getInstance();
+    const newValue = !config.get("verificationEnabled");
+    config.set("verificationEnabled", newValue);
+    
+    await ctx.answerCallbackQuery(
+      newValue ? "✅ Верификация включена" : "❌ Верификация выключена"
+    );
+    await handleAdminGame(ctx, deps);
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при изменении настройки");
+  }
+}
+
+// Управление пакетами
+export async function handleAdminPackages(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  const config = ConfigManager.getInstance();
+  const packages = config.getPackages();
+
+  const keyboard = new InlineKeyboard();
+  
+  for (const pkg of packages) {
+    keyboard.text(
+      `${pkg.name} (${pkg.rounds} вопросов - ${pkg.priceStars}⭐)`,
+      `admin_package:${pkg.id}`
+    ).row();
+  }
+  
+  keyboard
+    .text("➕ Добавить пакет", "admin_package_add")
+    .row()
+    .text("⬅️ Назад", "admin_game");
+
+  await ctx.editMessageText(
+    "*📦 Игровые пакеты*\n\n" +
+    "Выберите пакет для редактирования:",
+    { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    }
+  );
+}
+
+// Редактирование пакета
+export async function handleAdminPackageEdit(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps, packageId: string) {
+  if (!isAdmin(ctx, deps)) return;
+
+  const config = ConfigManager.getInstance();
+  const pkg = config.getPackage(packageId);
+  
+  if (!pkg) {
+    await ctx.answerCallbackQuery("❌ Пакет не найден");
+    return;
+  }
+
+  const keyboard = new InlineKeyboard()
+    .text("📝 Изменить название", `admin_pkg_name:${packageId}`)
+    .text("🔢 Изменить количество", `admin_pkg_rounds:${packageId}`)
+    .row()
+    .text("💰 Изменить цену", `admin_pkg_price:${packageId}`)
+    .text(pkg.isActive ? "🔴 Деактивировать" : "🟢 Активировать", `admin_pkg_toggle:${packageId}`)
+    .row()
+    .text("🗑️ Удалить пакет", `admin_pkg_delete:${packageId}`)
+    .row()
+    .text("⬅️ Назад", "admin_packages");
+
+  await ctx.editMessageText(
+    `*Редактирование пакета*\n\n` +
+    `📦 Название: ${pkg.name}\n` +
+    `🔢 Вопросов: ${pkg.rounds}\n` +
+    `💰 Цена: ${pkg.priceStars} ⭐\n` +
+    `📊 Статус: ${pkg.isActive ? "✅ Активен" : "❌ Неактивен"}\n` +
+    (pkg.description ? `📝 Описание: ${pkg.description}` : ""),
+    { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    }
+  );
+}
+
+// Управление таймерами
+export async function handleAdminTimers(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  const config = ConfigManager.getInstance();
+
+  const keyboard = new InlineKeyboard()
+    .text("⏱️ Таймер по умолчанию", "admin_timer_default")
+    .text("⏰ Макс. таймер", "admin_timer_max")
+    .row()
+    .text("⬅️ Назад", "admin_game");
+
+  await ctx.editMessageText(
+    `*⏱️ Настройки таймеров*\n\n` +
+    `Таймер по умолчанию: ${config.get("defaultTimerSeconds")} сек\n` +
+    `Максимальный таймер: ${config.get("maxTimerSeconds")} сек`,
+    { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    }
+  );
+}
+
+// Управление лимитами
+export async function handleAdminLimits(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  const config = ConfigManager.getInstance();
+
+  const keyboard = new InlineKeyboard()
+    .text("🎮 Макс. раундов в сессии", "admin_limit_session")
+    .text("🚫 Лимит пропусков", "admin_limit_skip")
+    .row()
+    .text("📊 Дневной лимит генераций", "admin_limit_daily")
+    .row()
+    .text("⬅️ Назад", "admin_game");
+
+  await ctx.editMessageText(
+    `*🚫 Настройки лимитов*\n\n` +
+    `🎮 Макс. раундов в сессии: ${config.get("maxSessionRounds")}\n` +
+    `🚫 Лимит пропусков: ${config.get("skipLimit")}\n` +
+    `📊 Дневной лимит генераций: ${config.get("maxDailyGenerations")}`,
+    { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    }
+  );
+}
+
+// Настройки уведомлений и обслуживания
+export async function handleAdminNotifications(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  const config = ConfigManager.getInstance();
+
+  const keyboard = new InlineKeyboard()
+    .text(
+      config.get("adminNotifications") ? "🔔 Выкл. уведомления" : "🔕 Вкл. уведомления",
+      "admin_toggle_notifications"
+    )
+    .row()
+    .text("💬 Изменить приветствие", "admin_edit_welcome")
+    .row()
+    .text("⬅️ Назад", "admin_menu");
+
+  await ctx.editMessageText(
+    `*🔔 Настройки уведомлений*\n\n` +
+    `Админ-уведомления: ${config.get("adminNotifications") ? "✅ Включены" : "❌ Выключены"}\n\n` +
+    `_Приветственное сообщение можно настроить_`,
+    { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    }
+  );
+}
+
+// Режим обслуживания
+export async function handleAdminMaintenance(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  const config = ConfigManager.getInstance();
+  const isEnabled = config.get("maintenanceMode");
+
+  const keyboard = new InlineKeyboard()
+    .text(
+      isEnabled ? "🟢 Выключить режим" : "🔴 Включить режим",
+      "admin_toggle_maintenance"
+    )
+    .row()
+    .text("✏️ Изменить сообщение", "admin_edit_maintenance")
+    .row()
+    .text("⬅️ Назад", "admin_menu");
+
+  await ctx.editMessageText(
+    `*🛠️ Режим обслуживания*\n\n` +
+    `Статус: ${isEnabled ? "🔴 Включен" : "🟢 Выключен"}\n\n` +
+    `Сообщение пользователям:\n_${config.get("maintenanceMessage")}_`,
+    { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    }
+  );
+}
+
+// Обработчики для переключателей
+export async function handleAdminToggleMaintenance(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const config = ConfigManager.getInstance();
+    const newValue = !config.get("maintenanceMode");
+    config.set("maintenanceMode", newValue);
+    
+    await ctx.answerCallbackQuery(
+      newValue ? "🔴 Режим обслуживания включен" : "🟢 Режим обслуживания выключен"
+    );
+    await handleAdminMaintenance(ctx, deps);
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при изменении настройки");
+  }
+}
+
+export async function handleAdminToggleNotifications(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const config = ConfigManager.getInstance();
+    const newValue = !config.get("adminNotifications");
+    config.set("adminNotifications", newValue);
+    
+    await ctx.answerCallbackQuery(
+      newValue ? "🔔 Уведомления включены" : "🔕 Уведомления выключены"
+    );
+    await handleAdminNotifications(ctx, deps);
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при изменении настройки");
+  }
+}
+
+// Редактирование сообщений
+export async function handleAdminEditWelcome(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "editing_welcome";
+  
+  const current = ConfigManager.getInstance().get("welcomeMessage");
+  
+  await ctx.editMessageText(
+    "*Редактирование приветственного сообщения*\n\n" +
+    "Текущее сообщение:\n" +
+    `_${current || "Используется стандартное"}_\n\n` +
+    "Отправьте новое сообщение или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+export async function handleAdminEditMaintenance(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "editing_maintenance";
+  
+  await ctx.editMessageText(
+    "*Редактирование сообщения об обслуживании*\n\n" +
+    "Текущее сообщение:\n" +
+    `_${ConfigManager.getInstance().get("maintenanceMessage")}_\n\n` +
+    "Отправьте новое сообщение или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+// Обработчики для редактирования пакетов
+export async function handleAdminPackageName(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps, packageId: string) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_package_name";
+  ctx.session.adminData = packageId;
+  
+  await ctx.editMessageText(
+    "*Изменение названия пакета*\n\n" +
+    "Введите новое название пакета.\n\n" +
+    "Отправьте текст или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+export async function handleAdminPackageRounds(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps, packageId: string) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_package_rounds";
+  ctx.session.adminData = packageId;
+  
+  await ctx.editMessageText(
+    "*Изменение количества вопросов*\n\n" +
+    "Введите количество вопросов в пакете.\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+export async function handleAdminPackagePrice(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps, packageId: string) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_package_price";
+  ctx.session.adminData = packageId;
+  
+  await ctx.editMessageText(
+    "*Изменение цены пакета*\n\n" +
+    "Введите цену в звездах Telegram (Stars).\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+export async function handleAdminPackageToggle(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps, packageId: string) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const config = ConfigManager.getInstance();
+    const pkg = config.getPackage(packageId);
+    if (!pkg) {
+      await ctx.answerCallbackQuery("❌ Пакет не найден");
+      return;
+    }
+
+    config.updatePackage(packageId, { isActive: !pkg.isActive });
+    
+    await ctx.answerCallbackQuery(
+      pkg.isActive ? "❌ Пакет деактивирован" : "✅ Пакет активирован"
+    );
+    await handleAdminPackageEdit(ctx, deps, packageId);
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при изменении пакета");
+  }
+}
+
+export async function handleAdminPackageDelete(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps, packageId: string) {
+  if (!isAdmin(ctx, deps)) return;
+
+  try {
+    const config = ConfigManager.getInstance();
+    config.removePackage(packageId);
+    
+    await ctx.answerCallbackQuery("🗑️ Пакет удален");
+    await handleAdminPackages(ctx, deps);
+  } catch (error) {
+    await ctx.answerCallbackQuery("❌ Ошибка при удалении пакета");
+  }
+}
+
+// Обработчики для таймеров
+export async function handleAdminTimerDefault(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_timer";
+  ctx.session.adminData = "defaultTimerSeconds";
+  
+  await ctx.editMessageText(
+    "*Настройка таймера по умолчанию*\n\n" +
+    "Введите время в секундах (от 10 до 300).\n\n" +
+    "_Текущее значение: " + ConfigManager.getInstance().get("defaultTimerSeconds") + " сек_\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+export async function handleAdminTimerMax(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_timer";
+  ctx.session.adminData = "maxTimerSeconds";
+  
+  await ctx.editMessageText(
+    "*Настройка максимального таймера*\n\n" +
+    "Введите максимальное время в секундах (от 60 до 600).\n\n" +
+    "_Текущее значение: " + ConfigManager.getInstance().get("maxTimerSeconds") + " сек_\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+// Обработчики для лимитов
+export async function handleAdminLimitSession(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_limit";
+  ctx.session.adminData = "maxSessionRounds";
+  
+  await ctx.editMessageText(
+    "*Настройка лимита раундов в сессии*\n\n" +
+    "Введите максимальное количество раундов в одной игровой сессии.\n\n" +
+    "_Текущее значение: " + ConfigManager.getInstance().get("maxSessionRounds") + "_\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+export async function handleAdminLimitSkip(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_limit";
+  ctx.session.adminData = "skipLimit";
+  
+  await ctx.editMessageText(
+    "*Настройка лимита пропусков*\n\n" +
+    "Введите максимальное количество пропусков за сессию.\n\n" +
+    "_Текущее значение: " + ConfigManager.getInstance().get("skipLimit") + "_\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
+}
+
+export async function handleAdminLimitDaily(ctx: Context & SessionFlavor<Session>, deps: AdminHandlerDeps) {
+  if (!isAdmin(ctx, deps)) return;
+
+  ctx.session.adminMode = "setting_limit";
+  ctx.session.adminData = "maxDailyGenerations";
+  
+  await ctx.editMessageText(
+    "*Настройка дневного лимита генераций*\n\n" +
+    "Введите максимальное количество генераций в день.\n\n" +
+    "_Текущее значение: " + ConfigManager.getInstance().get("maxDailyGenerations") + "_\n\n" +
+    "Отправьте число или /cancel для отмены",
+    { parse_mode: "Markdown" }
+  );
 }

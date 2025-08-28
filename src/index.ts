@@ -47,8 +47,32 @@ import {
   handleAdminModelTemp,
   handleAdminModelAttempts,
   handleAdminSetAttempts,
+  handleAdminGameFree,
+  handleAdminGamePremium,
+  handleAdminGameVerify,
+  handleAdminPackages,
+  handleAdminPackageEdit,
+  handleAdminTimers,
+  handleAdminLimits,
+  handleAdminNotifications,
+  handleAdminMaintenance,
+  handleAdminToggleMaintenance,
+  handleAdminToggleNotifications,
+  handleAdminEditWelcome,
+  handleAdminEditMaintenance,
+  handleAdminPackageName,
+  handleAdminPackageRounds,
+  handleAdminPackagePrice,
+  handleAdminPackageToggle,
+  handleAdminPackageDelete,
+  handleAdminTimerDefault,
+  handleAdminTimerMax,
+  handleAdminLimitSession,
+  handleAdminLimitSkip,
+  handleAdminLimitDaily,
   AdminHandlerDeps,
 } from "./handlers/admin";
+import { ConfigManager } from "./config/manager";
 
 dotenv.config();
 
@@ -76,8 +100,11 @@ const ADMIN_IDS = new Set(
     .filter(Boolean)
     .map((s) => Number(s))
 );
-const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || 20);
-const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || 30);
+// Initialize config manager
+const config = ConfigManager.getInstance();
+
+const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || config.get("freeRounds"));
+const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || config.get("premiumRounds"));
 const CONTENT_PACK_PATH = process.env.CONTENT_PACK_PATH || "./content/pack.default.json";
 const ADMIN_LOG_CHAT_ID = Number(process.env.ADMIN_LOG_CHAT_ID || 0);
 const ENABLE_BG_GEN = process.env.ENABLE_BG_GEN === "1";
@@ -95,6 +122,26 @@ type MyContext = Context & SessionFlavor<BotSessionData>;
 
 // Initialize bot
 const bot = new Bot<MyContext>(BOT_TOKEN);
+
+// Maintenance mode middleware
+bot.use(async (ctx, next) => {
+  const config = ConfigManager.getInstance();
+  
+  // Allow admins to use bot even in maintenance mode
+  const userId = ctx.from?.id;
+  if (userId && ADMIN_IDS.has(userId)) {
+    await next();
+    return;
+  }
+  
+  // Check maintenance mode
+  if (config.isMaintenanceMode()) {
+    await ctx.reply(config.get("maintenanceMessage"), { parse_mode: "Markdown" });
+    return;
+  }
+  
+  await next();
+});
 
 // Set commands
 bot.api.setMyCommands([
@@ -228,6 +275,56 @@ bot.callbackQuery(/^admin_set_model:(.+)$/, (ctx) => {
 bot.callbackQuery(/^admin_set_attempts:(\d+)$/, (ctx) => {
   const attempts = parseInt(ctx.match[1]);
   return handleAdminSetAttempts(ctx, adminDeps, attempts);
+});
+
+// Additional admin callbacks
+bot.callbackQuery("admin_game_free", (ctx) => handleAdminGameFree(ctx, adminDeps));
+bot.callbackQuery("admin_game_premium", (ctx) => handleAdminGamePremium(ctx, adminDeps));
+bot.callbackQuery("admin_game_verify", (ctx) => handleAdminGameVerify(ctx, adminDeps));
+bot.callbackQuery("admin_packages", (ctx) => handleAdminPackages(ctx, adminDeps));
+bot.callbackQuery("admin_timers", (ctx) => handleAdminTimers(ctx, adminDeps));
+bot.callbackQuery("admin_limits", (ctx) => handleAdminLimits(ctx, adminDeps));
+bot.callbackQuery("admin_notifications", (ctx) => handleAdminNotifications(ctx, adminDeps));
+bot.callbackQuery("admin_maintenance", (ctx) => handleAdminMaintenance(ctx, adminDeps));
+bot.callbackQuery("admin_toggle_maintenance", (ctx) => handleAdminToggleMaintenance(ctx, adminDeps));
+bot.callbackQuery("admin_toggle_notifications", (ctx) => handleAdminToggleNotifications(ctx, adminDeps));
+bot.callbackQuery("admin_edit_welcome", (ctx) => handleAdminEditWelcome(ctx, adminDeps));
+bot.callbackQuery("admin_edit_maintenance", (ctx) => handleAdminEditMaintenance(ctx, adminDeps));
+bot.callbackQuery("admin_timer_default", (ctx) => handleAdminTimerDefault(ctx, adminDeps));
+bot.callbackQuery("admin_timer_max", (ctx) => handleAdminTimerMax(ctx, adminDeps));
+bot.callbackQuery("admin_limit_session", (ctx) => handleAdminLimitSession(ctx, adminDeps));
+bot.callbackQuery("admin_limit_skip", (ctx) => handleAdminLimitSkip(ctx, adminDeps));
+bot.callbackQuery("admin_limit_daily", (ctx) => handleAdminLimitDaily(ctx, adminDeps));
+
+// Package management callbacks
+bot.callbackQuery(/^admin_package:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageEdit(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_name:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageName(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_rounds:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageRounds(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_price:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackagePrice(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_toggle:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageToggle(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_delete:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageDelete(ctx, adminDeps, packageId);
 });
 
 // Payments events (Stars)
