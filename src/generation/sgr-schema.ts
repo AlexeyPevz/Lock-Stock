@@ -120,7 +120,7 @@ export function validateLockStockGeneration(data: unknown): z.infer<typeof LockS
 }
 
 // Конфигурация для разных моделей
-export const MODEL_CONFIGS = {
+export const MODEL_CONFIGS: Record<string, any> = {
   "mistral-7b-instruct": {
     temperature: 0.8,
     max_tokens: 800,

@@ -285,7 +285,7 @@ export class StatsCollector {
         roundsToday: roundsToday.count || 0,
         roundsWeek: roundsWeek.count || 0,
         avgRoundsPerGame: gameStats.total_games > 0 
-          ? (gameStats.total_rounds / gameStats.total_games).toFixed(1) 
+          ? parseFloat((gameStats.total_rounds / gameStats.total_games).toFixed(1))
           : 0,
         
         totalGenerations: genStats.total || 0,

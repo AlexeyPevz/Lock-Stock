@@ -1,7 +1,7 @@
 import { Bot, Context, session, SessionFlavor } from "grammy";
 import dotenv from "dotenv";
 import { z } from "zod";
-import { Session as GameSession } from "./types";
+import { Session } from "./types";
 import { openDb } from "./db/client";
 import { logger } from "./utils/logger";
 import { createErrorHandler } from "./utils/errors";
@@ -121,7 +121,7 @@ const HEALTH_CHECK_INTERVAL = Number(process.env.HEALTH_CHECK_INTERVAL || 300);
 const PREMIUM_PRICE_STARS = Number(process.env.PREMIUM_PRICE_STARS || 100);
 
 // Initialize dependencies
-const sessions = new Map<number, GameSession>();
+const sessions = new Map<number, Session>();
 const db = openDb();
 
 // Initialize stats collector
@@ -129,11 +129,24 @@ import { initStatsCollector } from "./stats/collector";
 const statsCollector = initStatsCollector(db);
 
 // Session middleware
-interface BotSessionData {}
-type MyContext = Context & SessionFlavor<BotSessionData>;
+type MyContext = Context & SessionFlavor<Session>;
 
 // Initialize bot
 const bot = new Bot<MyContext>(BOT_TOKEN);
+
+// Session middleware
+bot.use(session({
+  initial: (): Session => ({
+    chatId: 0,
+    rounds: [],
+    currentIndex: 0,
+    revealed: {},
+    freeLimit: DEFAULT_FREE,
+    premiumTotal: DEFAULT_PREMIUM,
+    isPremium: false,
+    skipsUsed: 0,
+  })
+}));
 
 // Maintenance mode middleware
 bot.use(async (ctx, next) => {
@@ -164,12 +177,7 @@ bot.api.setMyCommands([
   { command: "help", description: "Помощь" },
 ]);
 
-// Session middleware
-bot.use(
-  session({
-    initial: (): BotSessionData => ({}),
-  })
-);
+
 
 // Dependencies for handlers
 const commandDeps: CommandHandlerDeps = {

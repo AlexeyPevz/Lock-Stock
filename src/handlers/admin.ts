@@ -1173,11 +1173,12 @@ export async function handleAdminChart(ctx: Context & SessionFlavor<Session>, de
       
       // Отображаем данные
       for (const row of chartData) {
-        const date = new Date(row.date).toLocaleDateString('ru-RU', { 
+        const data = row as any;
+        const date = new Date(data.date).toLocaleDateString('ru-RU', { 
           month: 'short', 
           day: 'numeric' 
         });
-        const value = row.value || 0;
+        const value = data.value || 0;
         const barLength = Math.round(value * scale);
         const bar = '█'.repeat(Math.max(1, barLength));
         
