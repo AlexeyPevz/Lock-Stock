@@ -3,6 +3,7 @@ import { Session, RevealState, RoundBundle } from "../types";
 import { logger } from "../utils/logger";
 import { renderRoundText } from "../utils/render";
 import { SqliteRoundRepository, SqliteFeedbackRepository } from "../db/repository";
+import { safeCallbackData } from "../utils/telegram-limits";
 import { NoContentError } from "../utils/errors";
 import Database from "better-sqlite3";
 
@@ -36,25 +37,25 @@ function buildFeedbackKeyboard(roundId: string, number: number) {
   return {
     inline_keyboard: [
       [
-        { text: "★1", callback_data: `fb:rate:${roundId}:${number}:1` },
-        { text: "★2", callback_data: `fb:rate:${roundId}:${number}:2` },
-        { text: "★3", callback_data: `fb:rate:${roundId}:${number}:3` },
+        { text: "★1", callback_data: safeCallbackData("fb:rate", roundId, number, 1) },
+        { text: "★2", callback_data: safeCallbackData("fb:rate", roundId, number, 2) },
+        { text: "★3", callback_data: safeCallbackData("fb:rate", roundId, number, 3) },
       ],
       [
-        { text: "★4", callback_data: `fb:rate:${roundId}:${number}:4` },
-        { text: "★5", callback_data: `fb:rate:${roundId}:${number}:5` },
+        { text: "★4", callback_data: safeCallbackData("fb:rate", roundId, number, 4) },
+        { text: "★5", callback_data: safeCallbackData("fb:rate", roundId, number, 5) },
       ],
       [
-        { text: "Сложно", callback_data: `fb:cat:${roundId}:${number}:hard` },
-        { text: "Легко", callback_data: `fb:cat:${roundId}:${number}:easy` },
+        { text: "Сложно", callback_data: safeCallbackData("fb:cat", roundId, number, "hard") },
+        { text: "Легко", callback_data: safeCallbackData("fb:cat", roundId, number, "easy") },
       ],
       [
-        { text: "Спорно", callback_data: `fb:cat:${roundId}:${number}:controversial` },
-        { text: "Узкая тема", callback_data: `fb:cat:${roundId}:${number}:niche` },
+        { text: "Спорно", callback_data: safeCallbackData("fb:cat", roundId, number, "controversial") },
+        { text: "Узкая тема", callback_data: safeCallbackData("fb:cat", roundId, number, "niche") },
       ],
       [
-        { text: "Формулировка", callback_data: `fb:cat:${roundId}:${number}:wording` },
-        { text: "Устарело", callback_data: `fb:cat:${roundId}:${number}:outdated` },
+        { text: "Формулировка", callback_data: safeCallbackData("fb:cat", roundId, number, "wording") },
+        { text: "Устарело", callback_data: safeCallbackData("fb:cat", roundId, number, "outdated") },
       ],
     ],
   };
@@ -119,7 +120,7 @@ export async function handleFeedback(ctx: Context, deps: CallbackHandlerDeps): P
     return;
   }
 
-  const match = (ctx.callbackQuery?.data || "").match(/fb:(rate|cat):(.+?):(\d+):(\w+)/);
+  const match = (ctx.callbackQuery?.data || "").match(/fb:(rate|cat):([^:]+):(\d+):([^:]+)/);
   if (!match) {
     await ctx.answerCallbackQuery();
     return;
@@ -141,7 +142,16 @@ export async function handleFeedback(ctx: Context, deps: CallbackHandlerDeps): P
     }
 
     await ctx.answerCallbackQuery({ text: "Спасибо за отзыв!" });
-      } catch (error: any) {
+    try {
+      const { getStatsCollector } = await import("../stats/collector");
+      getStatsCollector().logEvent(
+        kind === "rate" ? "feedback_rating" : "feedback_category",
+        userId,
+        ctx.chat?.id,
+        kind === "rate" ? { roundId, number, rating: Number(value) } : { roundId, number, category: value }
+      );
+    } catch {}
+  } catch (error: any) {
       logger.error("Failed to save feedback", { error, userId, roundId });
     await ctx.answerCallbackQuery({ text: "Не удалось сохранить отзыв" });
   }
@@ -201,9 +211,9 @@ export async function handleRoundNext(ctx: Context, deps: CallbackHandlerDeps): 
     session.revealed[session.currentIndex] = state;
 
     const text = renderRoundText(round, state);
-      const keyboard = buildHostKeyboard(state, session.skipsUsed < 2);
+    const keyboard = buildHostKeyboard(state, session.skipsUsed < 2);
 
-  await ctx.editMessageText(text, { reply_markup: keyboard });
+    await ctx.editMessageText(text, { reply_markup: keyboard });
     await ctx.answerCallbackQuery();
 
     logger.info("Round started", {
@@ -212,6 +222,10 @@ export async function handleRoundNext(ctx: Context, deps: CallbackHandlerDeps): 
       roundIndex: session.currentIndex,
       roundNumber: round.number,
     });
+    try {
+      const { getStatsCollector } = await import("../stats/collector");
+      getStatsCollector().logEvent("round_revealed", userId, chatId, { number: round.number });
+    } catch {}
   } catch (error) {
     if (error instanceof NoContentError) {
       await ctx.answerCallbackQuery({
@@ -262,6 +276,10 @@ export async function handleRoundSkip(ctx: Context, deps: CallbackHandlerDeps): 
 
   session.skipsUsed += 1;
   await ctx.reply("Раунд пропущен.", { reply_markup: nextButton });
+  try {
+    const { getStatsCollector } = await import("../stats/collector");
+    getStatsCollector().logEvent("round_skipped", ctx.from?.id, chatId, {});
+  } catch {}
 }
 
 export async function handleTimer(ctx: Context, deps: CallbackHandlerDeps): Promise<void> {
@@ -269,6 +287,10 @@ export async function handleTimer(ctx: Context, deps: CallbackHandlerDeps): Prom
   await ctx.answerCallbackQuery();
 
   const message = await ctx.reply(`⏱ Таймер: ${seconds}с`);
+  try {
+    const { getStatsCollector } = await import("../stats/collector");
+    getStatsCollector().logEvent("timer_started", ctx.from?.id, ctx.chat?.id, { seconds });
+  } catch {}
 
   const checkpoints = [Math.floor(seconds / 2), 10, 5, 0]
     .filter((s, i, arr) => s > 0 || i === arr.length - 1)

@@ -8,6 +8,7 @@ import { verifyWithWikipedia } from "../verification/wiki";
 import { getQualityReport, recomputeFactRatings, quarantineLowQualityFacts } from "../db/quality";
 import Database from "better-sqlite3";
 import { ConfigManager } from "../config/manager";
+import { getStatsCollector } from "../stats/collector";
 
 export interface CommandHandlerDeps {
   db: Database.Database;
@@ -25,6 +26,7 @@ export async function handleStart(ctx: Context): Promise<void> {
   const welcomeMessage = config.getMessages().welcome;
   
   await ctx.reply(welcomeMessage, { parse_mode: "Markdown" });
+  try { getStatsCollector().logEvent("start_used", ctx.from?.id, ctx.chat?.id); } catch {}
 }
 
 export async function handleRules(ctx: Context): Promise<void> {
@@ -130,6 +132,7 @@ export async function handleNewGame(ctx: Context, deps: CommandHandlerDeps): Pro
         },
       }
     );
+    try { getStatsCollector().logEvent("game_started", ctx.from?.id, ctx.chat?.id); } catch {}
   } catch (error: any) {
     logger.error("Error creating new game", { ...logger.fromContext(ctx), error });
     await ctx.reply("Произошла ошибка при создании игры. Попробуйте позже.");
