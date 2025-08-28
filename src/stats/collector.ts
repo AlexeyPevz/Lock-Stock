@@ -249,6 +249,14 @@ export class StatsCollector {
         WHERE event_type = 'feedback_rating' AND data IS NOT NULL
       `).get() as any;
       
+      // Верификация успех/неуспех
+      const verifyStats = this.db.prepare(`
+        SELECT 
+          SUM(CASE WHEN event_type = 'round_verified' THEN 1 ELSE 0 END) as ok,
+          SUM(CASE WHEN event_type = 'round_verify_failed' THEN 1 ELSE 0 END) as fail
+        FROM bot_events
+      `).get() as any;
+
       // Команды
       const commandUsage = this.db.prepare(`
         SELECT 
@@ -301,24 +309,41 @@ export class StatsCollector {
         
         avgRating: qualityStats.avg_rating || 0,
         totalRatings: qualityStats.total_ratings || 0,
-        verificationSuccessRate: '0%', // TODO: Implement
+        verificationSuccessRate: ((): string => {
+          const ok = verifyStats.ok || 0; const fail = verifyStats.fail || 0;
+          const total = ok + fail; if (total === 0) return '0%';
+          return ((ok / total) * 100).toFixed(1) + '%';
+        })(),
         
         commandUsage: commandUsage.reduce((acc, row) => {
           if (row.command) acc[row.command] = row.count;
           return acc;
         }, {}),
-        skipUsage: 0, // TODO: Implement
-        timerUsage: {}, // TODO: Implement
+        skipUsage: ((): number => {
+          const r = this.db.prepare(`SELECT COUNT(*) as c FROM bot_events WHERE event_type = 'round_skipped'`).get() as any; return r.c || 0;
+        })(),
+        timerUsage: ((): Record<string, number> => {
+          const rows = this.db.prepare(`
+            SELECT json_extract(data, '$.seconds') as seconds, COUNT(*) as count
+            FROM bot_events WHERE event_type = 'timer_started' GROUP BY seconds
+          `).all() as any[];
+          return rows.reduce((acc, r) => { if (r.seconds) acc[r.seconds] = r.count; return acc; }, {} as Record<string, number>);
+        })(),
         
         packagesSold: paymentStats.reduce((acc, row) => {
           if (row.package_id) acc[row.package_id] = row.count;
           return acc;
         }, {}),
         totalRevenue: paymentStats.reduce((sum, row) => sum + (row.revenue || 0), 0),
-        revenueToday: 0, // TODO: Implement
+        revenueToday: ((): number => {
+          const r = this.db.prepare(`
+            SELECT SUM(CAST(json_extract(data, '$.price_stars') AS INTEGER)) as sum
+            FROM bot_events WHERE event_type = 'payment_successful' AND date(created_at) = date('now')
+          `).get() as any; return r.sum || 0;
+        })(),
         
         uptimeHours: parseFloat(uptimeHours.toFixed(1)),
-        errorRate: '0%', // TODO: Implement from error logs
+        errorRate: '0%', // Placeholder until error events are logged
         avgResponseTime: 0, // TODO: Implement
       };
       

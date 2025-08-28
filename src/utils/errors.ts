@@ -1,5 +1,6 @@
 import { Context } from "grammy";
 import { logger } from "./logger";
+import * as Sentry from "@sentry/node";
 
 export class AppError extends Error {
   constructor(
@@ -63,6 +64,17 @@ export function createErrorHandler(options: ErrorHandlerOptions) {
       logger.warn("Operational error", errorContext);
     } else {
       logger.error("Unexpected error", errorContext);
+      try {
+        if (process.env.SENTRY_DSN) {
+          Sentry.captureException(err, {
+            extra: {
+              userId: ctx?.from?.id,
+              chatId: ctx?.chat?.id,
+              command: ctx?.message?.text,
+            },
+          });
+        }
+      } catch {}
     }
 
     // User response

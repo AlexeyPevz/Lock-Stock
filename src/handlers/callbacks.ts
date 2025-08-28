@@ -32,29 +32,29 @@ function buildHostKeyboard(state: RevealState, canSkip: boolean) {
   };
 }
 
-function buildFeedbackKeyboard(roundId: string, number: number) {
+function buildFeedbackKeyboard(roundIndex: number, number: number) {
   return {
     inline_keyboard: [
       [
-        { text: "★1", callback_data: `fb:rate:${roundId}:${number}:1` },
-        { text: "★2", callback_data: `fb:rate:${roundId}:${number}:2` },
-        { text: "★3", callback_data: `fb:rate:${roundId}:${number}:3` },
+        { text: "★1", callback_data: `fb:rate:${roundIndex}:${number}:1` },
+        { text: "★2", callback_data: `fb:rate:${roundIndex}:${number}:2` },
+        { text: "★3", callback_data: `fb:rate:${roundIndex}:${number}:3` },
       ],
       [
-        { text: "★4", callback_data: `fb:rate:${roundId}:${number}:4` },
-        { text: "★5", callback_data: `fb:rate:${roundId}:${number}:5` },
+        { text: "★4", callback_data: `fb:rate:${roundIndex}:${number}:4` },
+        { text: "★5", callback_data: `fb:rate:${roundIndex}:${number}:5` },
       ],
       [
-        { text: "Сложно", callback_data: `fb:cat:${roundId}:${number}:hard` },
-        { text: "Легко", callback_data: `fb:cat:${roundId}:${number}:easy` },
+        { text: "Сложно", callback_data: `fb:cat:${roundIndex}:${number}:hard` },
+        { text: "Легко", callback_data: `fb:cat:${roundIndex}:${number}:easy` },
       ],
       [
-        { text: "Спорно", callback_data: `fb:cat:${roundId}:${number}:controversial` },
-        { text: "Узкая тема", callback_data: `fb:cat:${roundId}:${number}:niche` },
+        { text: "Спорно", callback_data: `fb:cat:${roundIndex}:${number}:controversial` },
+        { text: "Узкая тема", callback_data: `fb:cat:${roundIndex}:${number}:niche` },
       ],
       [
-        { text: "Формулировка", callback_data: `fb:cat:${roundId}:${number}:wording` },
-        { text: "Устарело", callback_data: `fb:cat:${roundId}:${number}:outdated` },
+        { text: "Формулировка", callback_data: `fb:cat:${roundIndex}:${number}:wording` },
+        { text: "Устарело", callback_data: `fb:cat:${roundIndex}:${number}:outdated` },
       ],
     ],
   };
@@ -98,7 +98,7 @@ export async function handleReveal(ctx: Context, deps: CallbackHandlerDeps): Pro
   const canSkip = session.skipsUsed < 2; // Allow 2 skips per session
   
   const replyMarkup = state.showAnswer && session.roundIds?.[index]
-    ? buildFeedbackKeyboard(session.roundIds[index], round.number)
+    ? buildFeedbackKeyboard(index, round.number)
     : buildHostKeyboard(state, canSkip);
 
   try {
@@ -119,14 +119,21 @@ export async function handleFeedback(ctx: Context, deps: CallbackHandlerDeps): P
     return;
   }
 
-  const match = (ctx.callbackQuery?.data || "").match(/fb:(rate|cat):(.+?):(\d+):(\w+)/);
+  const match = (ctx.callbackQuery?.data || "").match(/fb:(rate|cat):(\d+):(\d+):([^:]+)/);
   if (!match) {
     await ctx.answerCallbackQuery();
     return;
   }
 
-  const [, kind, roundId, numberStr, value] = match;
+  const [, kind, indexStr, numberStr, value] = match;
   const number = Number(numberStr);
+  const roundIndex = Number(indexStr);
+
+  const chatId = ctx.chat?.id;
+  if (!chatId) { await ctx.answerCallbackQuery(); return; }
+  const session = deps.sessions.get(chatId);
+  const roundId = session?.roundIds?.[roundIndex];
+  if (!roundId) { await ctx.answerCallbackQuery({ text: "Сессия устарела" }); return; }
 
   const feedbackRepo = new SqliteFeedbackRepository(deps.db);
 
@@ -141,7 +148,16 @@ export async function handleFeedback(ctx: Context, deps: CallbackHandlerDeps): P
     }
 
     await ctx.answerCallbackQuery({ text: "Спасибо за отзыв!" });
-      } catch (error: any) {
+    try {
+      const { getStatsCollector } = await import("../stats/collector");
+      getStatsCollector().logEvent(
+        kind === "rate" ? "feedback_rating" : "feedback_category",
+        userId,
+        ctx.chat?.id,
+        kind === "rate" ? { roundId, number, rating: Number(value) } : { roundId, number, category: value }
+      );
+    } catch {}
+  } catch (error: any) {
       logger.error("Failed to save feedback", { error, userId, roundId });
     await ctx.answerCallbackQuery({ text: "Не удалось сохранить отзыв" });
   }
@@ -201,9 +217,9 @@ export async function handleRoundNext(ctx: Context, deps: CallbackHandlerDeps): 
     session.revealed[session.currentIndex] = state;
 
     const text = renderRoundText(round, state);
-      const keyboard = buildHostKeyboard(state, session.skipsUsed < 2);
+    const keyboard = buildHostKeyboard(state, session.skipsUsed < 2);
 
-  await ctx.editMessageText(text, { reply_markup: keyboard });
+    await ctx.editMessageText(text, { reply_markup: keyboard });
     await ctx.answerCallbackQuery();
 
     logger.info("Round started", {
@@ -212,6 +228,10 @@ export async function handleRoundNext(ctx: Context, deps: CallbackHandlerDeps): 
       roundIndex: session.currentIndex,
       roundNumber: round.number,
     });
+    try {
+      const { getStatsCollector } = await import("../stats/collector");
+      getStatsCollector().logEvent("round_revealed", userId, chatId, { number: round.number });
+    } catch {}
   } catch (error) {
     if (error instanceof NoContentError) {
       await ctx.answerCallbackQuery({
@@ -262,6 +282,10 @@ export async function handleRoundSkip(ctx: Context, deps: CallbackHandlerDeps): 
 
   session.skipsUsed += 1;
   await ctx.reply("Раунд пропущен.", { reply_markup: nextButton });
+  try {
+    const { getStatsCollector } = await import("../stats/collector");
+    getStatsCollector().logEvent("round_skipped", ctx.from?.id, chatId, {});
+  } catch {}
 }
 
 export async function handleTimer(ctx: Context, deps: CallbackHandlerDeps): Promise<void> {
@@ -269,6 +293,10 @@ export async function handleTimer(ctx: Context, deps: CallbackHandlerDeps): Prom
   await ctx.answerCallbackQuery();
 
   const message = await ctx.reply(`⏱ Таймер: ${seconds}с`);
+  try {
+    const { getStatsCollector } = await import("../stats/collector");
+    getStatsCollector().logEvent("timer_started", ctx.from?.id, ctx.chat?.id, { seconds });
+  } catch {}
 
   const checkpoints = [Math.floor(seconds / 2), 10, 5, 0]
     .filter((s, i, arr) => s > 0 || i === arr.length - 1)

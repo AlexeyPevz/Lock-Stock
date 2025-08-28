@@ -111,4 +111,11 @@ export async function handleSuccessfulPayment(ctx: any, deps: PaymentsDeps): Pro
 		session.premiumTotal = deps.premiumTotalRounds;
 	}
 	await ctx.reply("🎉 Оплата получена. Премиум активирован!");
+	try {
+		const { getStatsCollector } = await import("../stats/collector");
+		getStatsCollector().logEvent("payment_successful", ctx.from?.id, chatId, {
+			package_id: "premium_session",
+			price_stars: deps.premiumPriceStars,
+		});
+	} catch {}
 }

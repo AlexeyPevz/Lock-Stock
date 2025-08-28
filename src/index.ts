@@ -1,4 +1,7 @@
 import { Bot, Context, session, SessionFlavor } from "grammy";
+import { FileAdapter } from "@grammyjs/storage-file";
+import { RedisAdapter } from "@grammyjs/storage-redis";
+import { createClient as createRedisClient } from "redis";
 import dotenv from "dotenv";
 import { z } from "zod";
 import { Session } from "./types";
@@ -81,8 +84,20 @@ import {
   AdminHandlerDeps,
 } from "./handlers/admin";
 import { ConfigManager } from "./config/manager";
+import { unifiedSession } from "./middleware/unified-session";
 
 dotenv.config();
+
+// Initialize Sentry if configured
+import * as Sentry from "@sentry/node";
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.0),
+    environment: process.env.NODE_ENV || "development",
+  });
+  logger.info("Sentry initialized");
+}
 
 // Environment validation
 const EnvSchema = z.object({
@@ -134,7 +149,20 @@ type MyContext = Context & SessionFlavor<Session>;
 // Initialize bot
 const bot = new Bot<MyContext>(BOT_TOKEN);
 
-// Session middleware
+// Session middleware with Redis optional storage
+let storage: any = new FileAdapter<Session>({ dirName: "data/sessions" });
+if (process.env.SESSIONS_REDIS_URL) {
+  try {
+    const redis = createRedisClient({ url: process.env.SESSIONS_REDIS_URL });
+    // connect in background; grammy adapter handles commands
+    redis.connect().catch(() => {});
+    storage = new RedisAdapter<Session>({ instance: redis });
+    logger.info("Using Redis session storage");
+  } catch (e: any) {
+    logger.warn("Failed to init Redis storage, falling back to file", { error: e?.message });
+  }
+}
+
 bot.use(session({
   initial: (): Session => ({
     chatId: 0,
@@ -145,8 +173,12 @@ bot.use(session({
     premiumTotal: DEFAULT_PREMIUM,
     isPremium: false,
     skipsUsed: 0,
-  })
+  }),
+  storage,
 }));
+
+// Bridge legacy Map-based sessions with Grammy sessions (one-time migration, then kept in sync)
+bot.use(unifiedSession(sessions));
 
 // Maintenance mode middleware
 bot.use(async (ctx, next) => {
@@ -176,6 +208,19 @@ bot.api.setMyCommands([
   { command: "premium", description: "Премиум и Stars" },
   { command: "help", description: "Помощь" },
 ]);
+// Command usage logging middleware
+bot.use(async (ctx, next) => {
+  try {
+    const text = ctx.message?.text;
+    if (text && text.startsWith("/")) {
+      const command = text.split(" ")[0];
+      const { getStatsCollector } = await import("./stats/collector");
+      const collector = getStatsCollector();
+      collector.logEvent("command_used", ctx.from?.id, ctx.chat?.id, { command });
+    }
+  } catch {}
+  await next();
+});
 
 
 
@@ -250,9 +295,17 @@ bot.command("verify", async (ctx) => {
     roundRepo.markAsVerified(roundId);
     await ctx.reply("✅ Раунд верифицирован");
     await adminLog(`Verified round ${roundId} (#${round.number}) by @${ctx.from?.username || ctx.from?.id}`);
+    try {
+      const { getStatsCollector } = await import("./stats/collector");
+      getStatsCollector().logEvent("round_verified", ctx.from?.id, ctx.chat?.id, { roundId, number: round.number });
+    } catch {}
   } else {
     await ctx.reply(`❌ Проверка не пройдена: Q=${q.ok} H1=${h1.ok} H2=${h2.ok}`);
     await adminLog(`Verify FAILED for ${roundId}: Q=${q.ok} H1=${h1.ok} H2=${h2.ok}`);
+    try {
+      const { getStatsCollector } = await import("./stats/collector");
+      getStatsCollector().logEvent("round_verify_failed", ctx.from?.id, ctx.chat?.id, { roundId, number: round.number });
+    } catch {}
   }
 });
 
@@ -416,8 +469,16 @@ async function backgroundGenerationTick() {
       const roundRepo = new SqliteRoundRepository(db);
       roundRepo.markAsVerified(roundId);
       await adminLog(`✅ BG verified round ${roundId} (#${bundle.number})`);
+      try {
+        const { getStatsCollector } = await import("./stats/collector");
+        getStatsCollector().logEvent("round_verified", undefined, undefined, { roundId, number: bundle.number, source: "bg" });
+      } catch {}
     } else {
       await adminLog(`❌ BG verify failed ${roundId}: Q=${q.ok} H1=${h1.ok} H2=${h2.ok}`);
+      try {
+        const { getStatsCollector } = await import("./stats/collector");
+        getStatsCollector().logEvent("round_verify_failed", undefined, undefined, { roundId, number: bundle.number, source: "bg" });
+      } catch {}
     }
   } catch (error: any) {
     logger.error("Background generation error", { error });
