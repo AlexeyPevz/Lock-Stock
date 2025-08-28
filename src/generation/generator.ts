@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { LOCK_STOCK_SYSTEM_PROMPT } from "./prompt";
 import { factDomainSchema, validateDomainsDistinct, validateNoBannedPatterns } from "../content/validate";
+import { ConfigManager } from "../config/manager";
 
 const FactOut = z.object({
   text: z.string().min(10),
@@ -60,11 +61,25 @@ function validateGenerated(gen: GeneratedRound): void {
 }
 
 export async function generateOneRound(options: GeneratorOptions = {}): Promise<GeneratedRound> {
-  const temperature = options.temperature ?? 0.7;
-  const maxAttempts = options.maxAttempts ?? 3;
+  const config = ConfigManager.getInstance();
+  
+  // Проверяем, включен ли режим SGR
+  const useSGR = config.get("useSGR") ?? true;
+  
+  if (useSGR) {
+    // Используем новый SGR генератор
+    const { generateOneRoundSGR } = await import("./sgr-generator");
+    return generateOneRoundSGR(options);
+  }
+  
+  // Старый генератор для обратной совместимости
+  const modelConfig = config.getModelConfig();
+  
+  const temperature = options.temperature ?? modelConfig.temperature;
+  const maxAttempts = options.maxAttempts ?? modelConfig.maxAttempts;
   const client = getClient();
 
-  const models = buildModelCandidates(options.model);
+  const models = buildModelCandidates(options.model || modelConfig.model);
   let lastError: any = null;
 
   for (const model of models) {
@@ -75,7 +90,7 @@ export async function generateOneRound(options: GeneratorOptions = {}): Promise<
           temperature,
           response_format: { type: "json_object" },
           messages: [
-            { role: "system", content: LOCK_STOCK_SYSTEM_PROMPT },
+            { role: "system", content: config.getSystemPrompt() },
             { role: "user", content: "Сгенерируй один валидный раунд сейчас. Верни только JSON." },
           ],
         });

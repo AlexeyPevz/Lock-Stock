@@ -1,7 +1,7 @@
 import { Bot, Context, session, SessionFlavor } from "grammy";
 import dotenv from "dotenv";
 import { z } from "zod";
-import { Session as GameSession } from "./types";
+import { Session } from "./types";
 import { openDb } from "./db/client";
 import { logger } from "./utils/logger";
 import { createErrorHandler } from "./utils/errors";
@@ -31,6 +31,56 @@ import { generateOneRound } from "./generation/generator";
 import { ensureFactsAndRound } from "./db/upsert";
 import { SqliteRoundRepository } from "./db/repository";
 import { handlePremiumInfo, handlePremiumBuy, handlePreCheckout, handleSuccessfulPayment, PaymentsDeps } from "./handlers/payments";
+import {
+  handleAdminMenu,
+  handleAdminModel,
+  handleAdminModelChange,
+  handleAdminSetModel,
+  handleAdminPrompt,
+  handleAdminPromptEdit,
+  handleAdminGame,
+  handleAdminStats,
+  handleAdminTextInput,
+  handleAdminClose,
+  handleAdminPromptReset,
+  handleAdminPromptShow,
+  handleAdminModelTemp,
+  handleAdminModelAttempts,
+  handleAdminSetAttempts,
+  handleAdminGameFree,
+  handleAdminGamePremium,
+  handleAdminGameVerify,
+  handleAdminPackages,
+  handleAdminPackageEdit,
+  handleAdminTimers,
+  handleAdminLimits,
+  handleAdminNotifications,
+  handleAdminMaintenance,
+  handleAdminToggleMaintenance,
+  handleAdminToggleNotifications,
+  handleAdminEditWelcome,
+  handleAdminEditMaintenance,
+  handleAdminPackageName,
+  handleAdminPackageRounds,
+  handleAdminPackagePrice,
+  handleAdminPackageToggle,
+  handleAdminPackageDelete,
+  handleAdminTimerDefault,
+  handleAdminTimerMax,
+  handleAdminLimitSession,
+  handleAdminLimitSkip,
+  handleAdminLimitDaily,
+  handleAdminStatsAI,
+  handleAdminStatsFinance,
+  handleAdminStatsGames,
+  handleAdminStatsCharts,
+  handleAdminChart,
+  handleAdminModelSGR,
+  handleAdminToggleSGR,
+  handleAdminToggleExamples,
+  AdminHandlerDeps,
+} from "./handlers/admin";
+import { ConfigManager } from "./config/manager";
 
 dotenv.config();
 
@@ -58,8 +108,11 @@ const ADMIN_IDS = new Set(
     .filter(Boolean)
     .map((s) => Number(s))
 );
-const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || 20);
-const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || 30);
+// Initialize config manager
+const config = ConfigManager.getInstance();
+
+const DEFAULT_FREE = Number(parsedEnv.data.FREE_ROUNDS || config.get("freeRounds"));
+const DEFAULT_PREMIUM = Number(parsedEnv.data.PREMIUM_ROUNDS || config.get("premiumRounds"));
 const CONTENT_PACK_PATH = process.env.CONTENT_PACK_PATH || "./content/pack.default.json";
 const ADMIN_LOG_CHAT_ID = Number(process.env.ADMIN_LOG_CHAT_ID || 0);
 const ENABLE_BG_GEN = process.env.ENABLE_BG_GEN === "1";
@@ -68,15 +121,52 @@ const HEALTH_CHECK_INTERVAL = Number(process.env.HEALTH_CHECK_INTERVAL || 300);
 const PREMIUM_PRICE_STARS = Number(process.env.PREMIUM_PRICE_STARS || 100);
 
 // Initialize dependencies
-const sessions = new Map<number, GameSession>();
+const sessions = new Map<number, Session>();
 const db = openDb();
 
+// Initialize stats collector
+import { initStatsCollector } from "./stats/collector";
+const statsCollector = initStatsCollector(db);
+
 // Session middleware
-interface BotSessionData {}
-type MyContext = Context & SessionFlavor<BotSessionData>;
+type MyContext = Context & SessionFlavor<Session>;
 
 // Initialize bot
 const bot = new Bot<MyContext>(BOT_TOKEN);
+
+// Session middleware
+bot.use(session({
+  initial: (): Session => ({
+    chatId: 0,
+    rounds: [],
+    currentIndex: 0,
+    revealed: {},
+    freeLimit: DEFAULT_FREE,
+    premiumTotal: DEFAULT_PREMIUM,
+    isPremium: false,
+    skipsUsed: 0,
+  })
+}));
+
+// Maintenance mode middleware
+bot.use(async (ctx, next) => {
+  const config = ConfigManager.getInstance();
+  
+  // Allow admins to use bot even in maintenance mode
+  const userId = ctx.from?.id;
+  if (userId && ADMIN_IDS.has(userId)) {
+    await next();
+    return;
+  }
+  
+  // Check maintenance mode
+  if (config.isMaintenanceMode()) {
+    await ctx.reply(config.get("maintenanceMessage"), { parse_mode: "Markdown" });
+    return;
+  }
+  
+  await next();
+});
 
 // Set commands
 bot.api.setMyCommands([
@@ -87,12 +177,7 @@ bot.api.setMyCommands([
   { command: "help", description: "Помощь" },
 ]);
 
-// Session middleware
-bot.use(
-  session({
-    initial: (): BotSessionData => ({}),
-  })
-);
+
 
 // Dependencies for handlers
 const commandDeps: CommandHandlerDeps = {
@@ -127,6 +212,10 @@ bot.command("newgame", (ctx) => handleNewGame(ctx, commandDeps));
 bot.command("gen", (ctx) => handleGenerate(ctx, commandDeps));
 bot.command("quality", (ctx) => handleQuality(ctx, commandDeps));
 bot.command("recalc", (ctx) => handleRecalc(ctx, commandDeps));
+
+// Admin command
+const adminDeps: AdminHandlerDeps = { adminIds: ADMIN_IDS };
+bot.command("admin", (ctx) => handleAdminMenu(ctx, adminDeps));
 
 // Admin-only verify command
 bot.command("verify", async (ctx) => {
@@ -167,6 +256,12 @@ bot.command("verify", async (ctx) => {
   }
 });
 
+// Admin text input handler (must be before other handlers)
+bot.on("message:text", async (ctx, next) => {
+  const handled = await handleAdminTextInput(ctx, adminDeps);
+  if (!handled) await next();
+});
+
 // Callback query handlers
 bot.callbackQuery(/reveal:(question|hint1|hint2|answer)/, (ctx) => handleReveal(ctx, callbackDeps));
 bot.callbackQuery(/fb:(rate|cat):(.+?):(\d+):(\w+)/, (ctx) => handleFeedback(ctx, callbackDeps));
@@ -176,6 +271,96 @@ bot.callbackQuery(/timer:(30|60|90)/, (ctx) => handleTimer(ctx, callbackDeps));
 bot.callbackQuery("show:rules", (ctx) => handleShowRules(ctx));
 // Premium callbacks
 bot.callbackQuery("premium:buy", (ctx) => handlePremiumBuy(ctx, paymentsDeps));
+
+// Admin callbacks
+bot.callbackQuery("admin_menu", (ctx) => handleAdminMenu(ctx, adminDeps));
+bot.callbackQuery("admin_model", (ctx) => handleAdminModel(ctx, adminDeps));
+bot.callbackQuery("admin_model_change", (ctx) => handleAdminModelChange(ctx, adminDeps));
+bot.callbackQuery("admin_prompt", (ctx) => handleAdminPrompt(ctx, adminDeps));
+bot.callbackQuery("admin_prompt_edit", (ctx) => handleAdminPromptEdit(ctx, adminDeps));
+bot.callbackQuery("admin_prompt_reset", (ctx) => handleAdminPromptReset(ctx, adminDeps));
+bot.callbackQuery("admin_prompt_show", (ctx) => handleAdminPromptShow(ctx, adminDeps));
+bot.callbackQuery("admin_game", (ctx) => handleAdminGame(ctx, adminDeps));
+bot.callbackQuery("admin_stats", (ctx) => handleAdminStats(ctx, adminDeps));
+bot.callbackQuery("admin_close", (ctx) => handleAdminClose(ctx));
+bot.callbackQuery("admin_model_temp", (ctx) => handleAdminModelTemp(ctx, adminDeps));
+bot.callbackQuery("admin_model_attempts", (ctx) => handleAdminModelAttempts(ctx, adminDeps));
+bot.callbackQuery("admin_model_sgr", (ctx) => handleAdminModelSGR(ctx, adminDeps));
+bot.callbackQuery("admin_toggle_sgr", (ctx) => handleAdminToggleSGR(ctx, adminDeps));
+bot.callbackQuery("admin_toggle_examples", (ctx) => handleAdminToggleExamples(ctx, adminDeps));
+
+// Admin callbacks with data
+bot.callbackQuery(/^admin_set_model:(.+)$/, (ctx) => {
+  const modelId = ctx.match[1];
+  return handleAdminSetModel(ctx, adminDeps, modelId);
+});
+
+bot.callbackQuery(/^admin_set_attempts:(\d+)$/, (ctx) => {
+  const attempts = parseInt(ctx.match[1]);
+  return handleAdminSetAttempts(ctx, adminDeps, attempts);
+});
+
+// Additional admin callbacks
+bot.callbackQuery("admin_game_free", (ctx) => handleAdminGameFree(ctx, adminDeps));
+bot.callbackQuery("admin_game_premium", (ctx) => handleAdminGamePremium(ctx, adminDeps));
+bot.callbackQuery("admin_game_verify", (ctx) => handleAdminGameVerify(ctx, adminDeps));
+bot.callbackQuery("admin_packages", (ctx) => handleAdminPackages(ctx, adminDeps));
+bot.callbackQuery("admin_timers", (ctx) => handleAdminTimers(ctx, adminDeps));
+bot.callbackQuery("admin_limits", (ctx) => handleAdminLimits(ctx, adminDeps));
+bot.callbackQuery("admin_notifications", (ctx) => handleAdminNotifications(ctx, adminDeps));
+bot.callbackQuery("admin_maintenance", (ctx) => handleAdminMaintenance(ctx, adminDeps));
+bot.callbackQuery("admin_toggle_maintenance", (ctx) => handleAdminToggleMaintenance(ctx, adminDeps));
+bot.callbackQuery("admin_toggle_notifications", (ctx) => handleAdminToggleNotifications(ctx, adminDeps));
+bot.callbackQuery("admin_edit_welcome", (ctx) => handleAdminEditWelcome(ctx, adminDeps));
+bot.callbackQuery("admin_edit_maintenance", (ctx) => handleAdminEditMaintenance(ctx, adminDeps));
+bot.callbackQuery("admin_timer_default", (ctx) => handleAdminTimerDefault(ctx, adminDeps));
+bot.callbackQuery("admin_timer_max", (ctx) => handleAdminTimerMax(ctx, adminDeps));
+bot.callbackQuery("admin_limit_session", (ctx) => handleAdminLimitSession(ctx, adminDeps));
+bot.callbackQuery("admin_limit_skip", (ctx) => handleAdminLimitSkip(ctx, adminDeps));
+bot.callbackQuery("admin_limit_daily", (ctx) => handleAdminLimitDaily(ctx, adminDeps));
+
+// Package management callbacks
+bot.callbackQuery(/^admin_package:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageEdit(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_name:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageName(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_rounds:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageRounds(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_price:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackagePrice(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_toggle:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageToggle(ctx, adminDeps, packageId);
+});
+
+bot.callbackQuery(/^admin_pkg_delete:(.+)$/, (ctx) => {
+  const packageId = ctx.match[1];
+  return handleAdminPackageDelete(ctx, adminDeps, packageId);
+});
+
+// Statistics callbacks
+bot.callbackQuery("admin_stats_ai", (ctx) => handleAdminStatsAI(ctx, adminDeps));
+bot.callbackQuery("admin_stats_finance", (ctx) => handleAdminStatsFinance(ctx, adminDeps));
+bot.callbackQuery("admin_stats_games", (ctx) => handleAdminStatsGames(ctx, adminDeps));
+bot.callbackQuery("admin_stats_charts", (ctx) => handleAdminStatsCharts(ctx, adminDeps));
+
+bot.callbackQuery(/^admin_chart:(.+):(\d+)$/, (ctx) => {
+  const metric = ctx.match[1];
+  const days = ctx.match[2];
+  return handleAdminChart(ctx, adminDeps, metric, days);
+});
 
 // Payments events (Stars)
 bot.on("pre_checkout_query", (ctx) => handlePreCheckout(ctx));

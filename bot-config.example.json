@@ -1,0 +1,50 @@
+{
+  "openRouterModel": "mistralai/mistral-7b-instruct:free",
+  "systemPrompt": null,
+  "temperature": 0.8,
+  "maxAttempts": 3,
+  "useSGR": true,
+  "useExamples": true,
+  "freeRounds": 5,
+  "premiumRounds": 50,
+  "verificationEnabled": true,
+  "skipLimit": 3,
+  "packages": [
+    {
+      "id": "small",
+      "name": "Маленький пакет",
+      "rounds": 10,
+      "priceStars": 50,
+      "description": "Идеально для быстрой игры",
+      "isActive": true
+    },
+    {
+      "id": "medium",
+      "name": "Средний пакет",
+      "rounds": 20,
+      "priceStars": 90,
+      "description": "Оптимальный выбор для компании",
+      "isActive": true
+    },
+    {
+      "id": "large",
+      "name": "Большой пакет",
+      "rounds": 50,
+      "priceStars": 200,
+      "description": "Для настоящих любителей игры",
+      "isActive": true
+    }
+  ],
+  "defaultTimerSeconds": 60,
+  "maxTimerSeconds": 180,
+  "maxSessionRounds": 100,
+  "maxDailyGenerations": 1000,
+  "adminNotifications": true,
+  "maintenanceMode": false,
+  "maintenanceMessage": "⚙️ Бот на техобслуживании. Попробуйте позже.",
+  "welcomeMessage": "🎯 Добро пожаловать в игру *«Раз, два, три»*!\n\nЯ загадаю число от 1 до 1000, а вы должны его угадать.\n\nКоманды:\n• /newgame — Начать новую игру\n• /rules — Правила игры\n• /premium — Информация о пакетах\n• /help — Помощь\n\n💡 Для администраторов: /admin",
+  "backgroundGenerationEnabled": true,
+  "backgroundGenerationInterval": 300,
+  "debugMode": false,
+  "customSettings": {}
+}

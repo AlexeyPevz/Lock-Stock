@@ -7,6 +7,7 @@ import { ensureFactsAndRound } from "../db/upsert";
 import { verifyWithWikipedia } from "../verification/wiki";
 import { getQualityReport, recomputeFactRatings, quarantineLowQualityFacts } from "../db/quality";
 import Database from "better-sqlite3";
+import { ConfigManager } from "../config/manager";
 
 export interface CommandHandlerDeps {
   db: Database.Database;
@@ -19,22 +20,11 @@ export interface CommandHandlerDeps {
 
 export async function handleStart(ctx: Context): Promise<void> {
   logger.info("Start command", logger.fromContext(ctx));
-  await ctx.reply(
-    [
-      "🎲 Lock Stock Question Bot",
-      "",
-      "Помогаю проводить офлайн-игру по правилам Lock Stock:",
-      "• Числовой вопрос и две независимые подсказки",
-      "• Ведущий открывает их по кнопкам",
-      "• Ответ — целое число от 1 до 1000",
-      "",
-      "Команды:",
-      "/newgame — Начать новую игру",
-      "/rules — Правила игры",
-      "/premium — Информация о премиум-доступе",
-      "/help — Помощь",
-    ].join("\n")
-  );
+  
+  const config = ConfigManager.getInstance();
+  const welcomeMessage = config.getMessages().welcome;
+  
+  await ctx.reply(welcomeMessage, { parse_mode: "Markdown" });
 }
 
 export async function handleRules(ctx: Context): Promise<void> {

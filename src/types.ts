@@ -40,4 +40,8 @@ export interface Session {
   premiumTotal: number; // total rounds when premium
   isPremium: boolean;
   skipsUsed: number; // number of skips used in this session
+  adminMode?: "editing_prompt" | "setting_temperature" | "setting_free_rounds" | "setting_premium_rounds" 
+    | "setting_package_name" | "setting_package_rounds" | "setting_package_price"
+    | "setting_timer" | "setting_limit" | "editing_welcome" | "editing_maintenance"; // Admin input mode
+  adminData?: string; // Additional data for admin mode (package ID, config key, etc.)
 }
