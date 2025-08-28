@@ -121,8 +121,9 @@ export class ConfigManager {
   }
 
   private getDefaultSystemPrompt(): string {
-    // Импортируем дефолтный промпт
-    return require("../generation/prompt").LOCK_STOCK_SYSTEM_PROMPT;
+    // Используем lazy import для избежания циклических зависимостей
+    const { LOCK_STOCK_SYSTEM_PROMPT } = require("../generation/prompt");
+    return LOCK_STOCK_SYSTEM_PROMPT;
   }
 
   // Методы для работы с моделями
